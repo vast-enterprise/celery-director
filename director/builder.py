@@ -70,7 +70,7 @@ class WorkflowBuilder(object):
         if type(self.queue) is not str or type(self.custom_queues) is not dict:
             raise WorkflowSyntaxError()
 
-    def parse(self, tasks, is_hook=False):
+    def parse(self, tasks, is_hook=False, payload=None):
         canvas = []
 
         for task in tasks:
@@ -94,9 +94,9 @@ class WorkflowBuilder(object):
 
         return canvas
 
-    def build(self):
+    def build(self, payload):
         self.parse_queues()
-        self.canvas = self.parse(self.tasks)
+        self.canvas = self.parse(self.tasks, payload=payload)
         self.canvas.insert(0, start.si(self.workflow.id).set(queue=self.queue))
         self.canvas.append(end.si(self.workflow.id).set(queue=self.queue))
 
@@ -120,16 +120,24 @@ class WorkflowBuilder(object):
 
         self.previous = initial_previous
 
-    def run(self):
-        if not self.canvas:
-            self.build()
+    def run(self, payload=None):
+        if not self.canvas or payload is not None:
+            self.build(payload)
 
-        canvas = chain(*self.canvas, task_id=uuid())
+        task_id = uuid()
+        priority = 1
+        if payload is not None:
+            if "task_id" in payload:
+                task_id = payload["task_id"]
+            if "priority" in payload:
+                priority = 10 - payload["priority"]
+        canvas = chain(*self.canvas, task_id=task_id)
 
         self.build_hooks()
 
         try:
-            return canvas.apply_async(
+            return canvas.send_task(
+                priority=priority,
                 link=self.success_hook_canvas,
                 link_error=self.failure_hook_canvas,
             )
