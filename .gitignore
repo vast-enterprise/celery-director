@@ -2,6 +2,7 @@
 __pycache__/
 venv/
 *.pyc
+new_env/
 
 # Build
 build/
@@ -27,3 +28,6 @@ celerybeat-schedule.db
 
 # Docs
 docs/site/
+
+#Project folder
+my_workflows
