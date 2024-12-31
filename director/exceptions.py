@@ -16,3 +16,7 @@ class WorkflowSyntaxError(Exception):
 
 class UserNotFound(Exception):
     pass
+
+
+class PayloadSyntaxError(Exception):
+    pass

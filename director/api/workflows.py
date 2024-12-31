@@ -32,13 +32,18 @@ def _execute_workflow(project, name, payload={}, comment=None):
     except WorkflowNotFound:
         abort(404, f"Workflow {fullname} not found")
 
+    # 改成 payload 里面的 task_id
+    task_id = "unknown"
+    if (task_id in payload):
+        task_id = payload["task_id"]
+        
     # Create the workflow in DB
-    obj = Workflow(project=project, name=name, payload=payload, comment=comment)
+    obj = Workflow(tripo_task_id=task_id, project=project, name=name, payload=payload, comment=comment)
     obj.save()
 
     # Build the workflow and execute it
     data = obj.to_dict()
-    workflow = WorkflowBuilder(obj.id)
+    workflow = WorkflowBuilder(task_id)
     workflow.run()
 
     app.logger.info(f"Workflow sent : {workflow.canvas}")

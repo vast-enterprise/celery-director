@@ -9,15 +9,20 @@ from director.models.workflows import Workflow
 from director.tasks.workflows import start, end, failure_hooks_launcher
 
 
+class CanvasPhase:
+    def __init__(self, phase, previous) -> None:
+        self.phase = phase
+        self.previous = previous
+
 class WorkflowBuilder(object):
-    def __init__(self, workflow_id):
+    def __init__(self, workflow_id, conditions):
         self.workflow_id = workflow_id
         self._workflow = None
 
         self.queue = cel_workflows.get_queue(str(self.workflow))
         self.custom_queues = {}
 
-        self.tasks = cel_workflows.get_tasks(str(self.workflow))
+        self.tasks = cel_workflows.get_tasks(str(self.workflow), conditions)
         self.canvas = []
 
         self.failure_hook = cel_workflows.get_failure_hook_task(str(self.workflow))
@@ -77,13 +82,9 @@ class WorkflowBuilder(object):
             if type(task) is str:
                 signature = self.new_task(task, is_hook)
                 canvas.append(signature)
-            elif type(task) is dict:
-                name = list(task)[0]
-                if "type" not in task[name] and task[name]["type"] != "group":
-                    raise WorkflowSyntaxError()
-
+            elif type(task) is list:
                 sub_canvas_tasks = [
-                    self.new_task(t, is_hook, single=False) for t in task[name]["tasks"]
+                    self.new_task(t, is_hook, single=False) for t in task
                 ]
 
                 sub_canvas = group(*sub_canvas_tasks, task_id=uuid())
@@ -125,10 +126,10 @@ class WorkflowBuilder(object):
             self.build()
 
         canvas = chain(*self.canvas, task_id=uuid())
-
         self.build_hooks()
 
         try:
+            # TODO send task
             return canvas.apply_async(
                 link=self.success_hook_canvas,
                 link_error=self.failure_hook_canvas,

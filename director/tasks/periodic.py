@@ -12,7 +12,13 @@ logger = logging.getLogger()
 @cel.task()
 def execute(workflow, payload):
     project, name = workflow.split(".")
-    c_obj = Workflow(project=project, name=name, payload=payload, periodic=True)
+
+    # 改成 payload 里面的 task_id
+    task_id = "unknown"
+    if (task_id in payload):
+        task_id = payload["task_id"]
+
+    c_obj = Workflow(tripo_task_id=task_id, project=project, name=name, payload=payload, periodic=True)
     c_obj.save()
 
     # Build the workflow and execute it

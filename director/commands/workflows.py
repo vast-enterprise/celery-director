@@ -13,6 +13,7 @@ from director.extensions import cel_workflows
 from director.models.workflows import Workflow
 from director.utils import validate, format_schema_errors, build_celery_schedule
 
+from director.exceptions import PayloadSyntaxError
 
 def tasks_to_ascii(tasks, hooks):
     tasks_str = ""
@@ -111,6 +112,9 @@ def show_workflow(ctx, name):
 def run_workflow(ctx, fullname, payload, comment):
     """Execute a workflow"""
     try:
+        # fullname 是 workflow 的名字
+        # 目前采用用版本号:任务名称, 中间有一个冒号 :
+        # 例如 v2.0-20240919:image2model
         wf = cel_workflows.get_by_name(fullname)
         payload = json.loads(payload)
 
@@ -132,16 +136,27 @@ def run_workflow(ctx, fullname, payload, comment):
         click.echo(f"Error in the payload : {e}")
         raise click.Abort()
 
+    # 在 payload 里面必须要有 task_id
+    if "task_id" not in payload:
+        raise PayloadSyntaxError("task_id is not found in payload")
+
+    tripo_task_id = payload["task_id"]
+    # conditions 是一个字典, 里面决定某些子任务是否执行
+    # 如果没有 conditions 则所有子任务都执行
+    conditions = payload.get("conditions", {})
+
     # Create the workflow object
-    project, name = fullname.split(".")
-    obj = Workflow(project=project, name=name, payload=payload, comment=comment)
+    # 把 v2.0-20240919:image2model 拆开
+    model_version, task_name = fullname.split(":")
+    obj = Workflow(tripo_task_id=tripo_task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
     obj.save()
 
     # Build the canvas and execute it
-    _workflow = WorkflowBuilder(obj.id)
+    # 用 obj.id 主要是怕未来如果有任务重试，用 task_id 做主键会有重复
+    _workflow = WorkflowBuilder(obj.id, conditions)
     _workflow.run()
 
-    click.echo(f"Workflow {obj.id} launched")
+    click.echo(f"Workflow {tripo_task_id} for task {tripo_task_id} launched")
 
 
 @workflow.command(name="cancel")
@@ -179,9 +194,14 @@ def relaunch_workflow(ctx, id):
     if not obj:
         click.echo(f"Workflow {id} does not exist")
         raise click.Abort()
+    
+    # 改成 payload 里面的 task_id
+    task_id = "unknown"
+    if (task_id in obj.payload):
+        task_id = obj.payload["task_id"]
 
     # Create the workflow in DB
-    obj = Workflow(project=obj.project, name=obj.name, payload=obj.payload)
+    obj = Workflow(tripo_task_id=task_id, project=obj.project, name=obj.name, payload=obj.payload)
     obj.save()
 
     # Build the workflow and execute it
