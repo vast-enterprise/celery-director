@@ -141,9 +141,6 @@ def run_workflow(ctx, fullname, payload, comment):
         raise PayloadSyntaxError("task_id is not found in payload")
 
     tripo_task_id = payload["task_id"]
-    # conditions 是一个字典, 里面决定某些子任务是否执行
-    # 如果没有 conditions 则所有子任务都执行
-    conditions = payload.get("conditions", {})
 
     # Create the workflow object
     # 把 v2.0-20240919:image2model 拆开
@@ -153,10 +150,15 @@ def run_workflow(ctx, fullname, payload, comment):
 
     # Build the canvas and execute it
     # 用 obj.id 主要是怕未来如果有任务重试，用 task_id 做主键会有重复
-    _workflow = WorkflowBuilder(obj.id, conditions)
-    _workflow.run()
+    # TODO 在网页端增加利用 task_id 搜索
+    _workflow = WorkflowBuilder(obj.id)
 
-    click.echo(f"Workflow {tripo_task_id} for task {tripo_task_id} launched")
+    # conditions 是一个字典, 里面决定某些子任务是否执行
+    # 如果没有 conditions 则所有子任务都执行
+    conditions = payload.get("conditions", {})
+    _workflow.run(conditions)
+
+    click.echo(f"Workflow {obj.id} for task {tripo_task_id} launched")
 
 
 @workflow.command(name="cancel")
@@ -194,18 +196,14 @@ def relaunch_workflow(ctx, id):
     if not obj:
         click.echo(f"Workflow {id} does not exist")
         raise click.Abort()
-    
-    # 改成 payload 里面的 task_id
-    task_id = "unknown"
-    if (task_id in obj.payload):
-        task_id = obj.payload["task_id"]
 
     # Create the workflow in DB
-    obj = Workflow(tripo_task_id=task_id, project=obj.project, name=obj.name, payload=obj.payload)
+    obj = Workflow(tripo_task_id=obj.tripo_task_id, project=obj.model_version, name=obj.task_name, payload=obj.payload)
     obj.save()
 
     # Build the workflow and execute it
     workflow = WorkflowBuilder(obj.id)
-    workflow.run()
+    conditions = obj.payload["conditions"]
+    workflow.run(conditions)
 
     click.echo(f"Workflow {obj.id} relaunched")

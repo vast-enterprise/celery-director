@@ -11,14 +11,9 @@ logger = logging.getLogger()
 
 @cel.task()
 def execute(workflow, payload):
-    project, name = workflow.split(".")
-
-    # 改成 payload 里面的 task_id
-    task_id = "unknown"
-    if (task_id in payload):
-        task_id = payload["task_id"]
-
-    c_obj = Workflow(tripo_task_id=task_id, project=project, name=name, payload=payload, periodic=True)
+    # periodic task 会在 celery beat 执行, 需要单独开启这个 worker
+    model_version, task_name = workflow.split(":")
+    c_obj = Workflow(tripo_task_id="na", model_version=model_version, task_name=task_name, payload=payload, periodic=True)
     c_obj.save()
 
     # Build the workflow and execute it
@@ -37,8 +32,9 @@ def execute(workflow, payload):
 @cel.task()
 def cleanup(retentions):
     count = 0
+    # cleanup 会在 celery beat 执行, 需要单独开启这个 worker
     for workflow_name, retention in retentions.items():
-        project, name = workflow_name.split(".")
+        model_version, task_name = workflow_name.split(":")
         logger.info(f"Cleaning {workflow_name} (retention of {retention})")
 
         bind = db.session.get_bind()
@@ -49,7 +45,7 @@ def cleanup(retentions):
         workflows = (
             db.session.query(Workflow)
             .options(load_only(Workflow.id))
-            .filter_by(project=project, name=name)
+            .filter_by(model_version=model_version, task_name=task_name)
             .order_by(Workflow.created_at.desc())
             .offset(retention)
             .all()

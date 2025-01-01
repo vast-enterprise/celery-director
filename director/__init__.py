@@ -119,6 +119,7 @@ def create_app(
             {
                 "periodic-cleanup": {
                     "task": "director.tasks.periodic.cleanup",
+                    # 可以修改 retension 任务的执行频率, 现在是每天凌晨 0 点执行
                     "schedule": crontab(minute=0, hour=0),
                     "args": (retentions,),
                 }

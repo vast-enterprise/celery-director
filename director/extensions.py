@@ -55,6 +55,7 @@ class CeleryWorkflow:
         self.path = Path(self.app.config["DIRECTOR_HOME"]).resolve() / "workflows.yml"
         with open(self.path) as f:
             self.workflows = _transform_yaml(yaml.load(f, Loader=yaml.SafeLoader))
+            # self.workflows = yaml.load(f, Loader=yaml.SafeLoader)
         self.import_user_tasks()
         self.read_schemas()
 
@@ -64,13 +65,14 @@ class CeleryWorkflow:
             raise WorkflowNotFound(f"Workflow {name} not found")
         return workflow
 
-    def get_tasks(self, name, conditions):
-        original_workflow = self.get_by_name(name)["tasks"]
-        print(original_workflow)
-        res_list = []
-        _process_task_list(original_workflow, conditions, res_list)
-        print(res_list)
-        return res_list
+    def get_tasks(self, name):
+        return self.get_by_name(name)["tasks"]
+
+    def get_type(self, name):
+        try:
+            return self.get_by_name(name)["type"]
+        except KeyError:
+            return "chain"
 
     def get_hook_task(self, name, hook_name):
         if (

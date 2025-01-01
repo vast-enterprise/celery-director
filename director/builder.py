@@ -15,14 +15,15 @@ class CanvasPhase:
         self.previous = previous
 
 class WorkflowBuilder(object):
-    def __init__(self, workflow_id, conditions):
+    def __init__(self, workflow_id):
         self.workflow_id = workflow_id
         self._workflow = None
 
+        self.root_type = cel_workflows.get_type(str(self.workflow))
         self.queue = cel_workflows.get_queue(str(self.workflow))
         self.custom_queues = {}
 
-        self.tasks = cel_workflows.get_tasks(str(self.workflow), conditions)
+        self.tasks = cel_workflows.get_tasks(str(self.workflow))
         self.canvas = []
 
         self.failure_hook = cel_workflows.get_failure_hook_task(str(self.workflow))
@@ -40,31 +41,39 @@ class WorkflowBuilder(object):
             self._workflow = Workflow.query.filter_by(id=self.workflow_id).first()
         return self._workflow
 
-    def new_task(self, task_name, is_hook, single=True):
+    def new_task(self, task_name, previous, is_hook, original_task_name=None):
         task_id = uuid()
 
         queue = self.custom_queues.get(task_name, self.queue)
 
-        # We create the Celery task specifying its UID
-        signature = cel.tasks.get(task_name).subtask(
-            kwargs={"workflow_id": self.workflow_id, "payload": self.workflow.payload},
-            queue=queue,
-            task_id=task_id,
-        )
+        if original_task_name:
+            # We create the Celery task specifying its UID
+            signature = cel.tasks.get(task_name).subtask(
+                kwargs={"workflow_id": self.workflow_id, "payload": self.workflow.payload, "original_task_name": original_task_name},
+                queue=queue,
+                task_id=task_id,
+            )
+        else:
+            # We create the Celery task specifying its UID
+            signature = cel.tasks.get(task_name).subtask(
+                kwargs={"workflow_id": self.workflow_id, "payload": self.workflow.payload},
+                queue=queue,
+                task_id=task_id,
+            )
+
+        if type(previous) != list:
+            previous = [previous]
 
         # Director task has the same UID
         task = Task(
             id=task_id,
             key=task_name,
-            previous=self.previous,
             workflow_id=self.workflow.id,
+            previous=previous,
             status=StatusType.pending,
             is_hook=is_hook,
         )
         task.save()
-
-        if single:
-            self.previous = [signature.id]
 
         return signature
 
@@ -74,32 +83,67 @@ class WorkflowBuilder(object):
             self.queue = self.queue.get("default", "celery")
         if type(self.queue) is not str or type(self.custom_queues) is not dict:
             raise WorkflowSyntaxError()
-
-    def parse(self, tasks, is_hook=False):
-        canvas = []
-
-        for task in tasks:
+    
+    def parse_wf(self, tasks, conditions, is_hook=False):
+            full_canvas = self.parse_recursive(tasks, None, None, conditions, is_hook)
+            return full_canvas
+        
+    def parse_recursive(self, tasks, parent_type, parent, conditions, is_hook):
+        previous = parent.phase.id if parent!=None else []
+        canvas_phase = []
+        for task in tasks:  
             if type(task) is str:
-                signature = self.new_task(task, is_hook)
-                canvas.append(signature)
-            elif type(task) is list:
-                sub_canvas_tasks = [
-                    self.new_task(t, is_hook, single=False) for t in task
-                ]
+                if len(canvas_phase) > 0 and parent_type!="group":
+                    previous = canvas_phase[-1].previous
 
-                sub_canvas = group(*sub_canvas_tasks, task_id=uuid())
-                canvas.append(sub_canvas)
-                self.previous = [s.id for s in sub_canvas_tasks]
+                # 在这根据 conditions 判断一下任务是否是被跳过的
+                # 如果不执行把任务换成 skipped_task 以免破坏 pipeline 结构
+                if task in conditions and not conditions[task]:
+                    # TODO 可能有更好办法？
+                    task = "skipped_task"
+
+                signature = self.new_task(task, previous, is_hook)
+                canvas_phase.append(CanvasPhase(signature, signature.id))
+            elif type(task) is dict:
+                task_name = list(task)[0]
+                task_type = task[task_name]["type"]
+                if "type" not in task[task_name] \
+                    and (task[task_name]["type"] != "group" \
+                        or task[task_name]["type"] != "chain"):
+                    raise WorkflowSyntaxError()
+                
+                current = None
+                if len(canvas_phase) > 0 and parent_type!="group":
+                    current = canvas_phase[-1]
+                else:
+                    current = parent
+                canvas_phase.append(self.parse_recursive(task[task_name]["tasks"], task_type, current, conditions, is_hook))   
             else:
                 raise WorkflowSyntaxError()
+                        
+        if parent_type == "chain":
+            chain_previous = canvas_phase[-1].phase.id
+            return CanvasPhase(chain([ca.phase for ca in canvas_phase]), chain_previous)
+        elif parent_type == "group":
+            group_previous = [ca.previous for ca in canvas_phase]
+            return CanvasPhase(group([ca.phase for ca in canvas_phase]), group_previous)
+        else:
+            return canvas_phase
 
-        return canvas
-
-    def build(self):
+    def build(self, conditions):
         self.parse_queues()
-        self.canvas = self.parse(self.tasks)
-        self.canvas.insert(0, start.si(self.workflow.id).set(queue=self.queue))
-        self.canvas.append(end.si(self.workflow.id).set(queue=self.queue))
+        self.canvas_phase = self.parse_wf(self.tasks, conditions)
+        self.canvas_phase.insert(0, CanvasPhase(
+            start.si(self.workflow.id).set(queue=self.queue),
+        []))
+        self.canvas_phase.append(CanvasPhase(
+            end.si(self.workflow.id).set(queue=self.queue),
+        []))
+                                 
+        if self.root_type == "group":
+            self.canvas = group([ca.phase for ca in self.canvas_phase], task_id=uuid())
+        else:
+            self.canvas = chain([ca.phase for ca in self.canvas_phase], task_id=uuid())
 
     def build_hooks(self):
         initial_previous = self.previous
@@ -117,21 +161,21 @@ class WorkflowBuilder(object):
 
         if self.success_hook and not self.success_hook_canvas:
             self.previous = None
-            self.success_hook_canvas = [self.parse([self.success_hook], True)[0]]
+            self.success_hook_canvas = [self.parse_wf([self.success_hook], {}, True)[0].phase]
 
         self.previous = initial_previous
 
-    def run(self):
+    def run(self, conditions = {}):
         if not self.canvas:
-            self.build()
-
-        canvas = chain(*self.canvas, task_id=uuid())
+            self.build(conditions)
         self.build_hooks()
 
         try:
             # TODO send task
-            return canvas.apply_async(
+            return self.canvas.apply_async(
+                # 成功的 hook 会在运行 workflow 的同一个 worker 执行
                 link=self.success_hook_canvas,
+                # 失败的 hook 会在 celery beat 执行
                 link_error=self.failure_hook_canvas,
             )
 

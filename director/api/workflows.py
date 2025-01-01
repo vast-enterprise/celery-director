@@ -21,8 +21,8 @@ def _get_workflow(workflow_id):
     return workflow
 
 
-def _execute_workflow(project, name, payload={}, comment=None):
-    fullname = f"{project}.{name}"
+def _execute_workflow(model_version, task_name, payload={}, comment=None):
+    fullname = f"{model_version}:{task_name}"
 
     # Check if the workflow exists
     try:
@@ -32,18 +32,15 @@ def _execute_workflow(project, name, payload={}, comment=None):
     except WorkflowNotFound:
         abort(404, f"Workflow {fullname} not found")
 
-    # 改成 payload 里面的 task_id
-    task_id = "unknown"
-    if (task_id in payload):
-        task_id = payload["task_id"]
+    task_id = payload.get("task_id", "unknown")
         
     # Create the workflow in DB
-    obj = Workflow(tripo_task_id=task_id, project=project, name=name, payload=payload, comment=comment)
+    obj = Workflow(tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
     obj.save()
 
     # Build the workflow and execute it
     data = obj.to_dict()
-    workflow = WorkflowBuilder(task_id)
+    workflow = WorkflowBuilder(obj.id)
     workflow.run()
 
     app.logger.info(f"Workflow sent : {workflow.canvas}")
@@ -79,6 +76,9 @@ def create_workflow():
         request.get_json()["payload"],
         request.get_json().get("comment"),
     )
+    if "task_id" not in payload:
+        return jsonify("no task_id in payload"), 400
+
     data, _ = _execute_workflow(project, name, payload, comment)
     return jsonify(data), 201
 
@@ -89,7 +89,7 @@ def relaunch_workflow(workflow_id):
     obj = _get_workflow(workflow_id)
     if hasattr(obj, "comment"):
         comment = obj.comment
-    data, _ = _execute_workflow(obj.project, obj.name, obj.payload, comment)
+    data, _ = _execute_workflow(obj.model_version, obj.task_name, obj.payload, comment)
     return jsonify(data), 201
 
 
