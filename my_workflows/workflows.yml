@@ -28,12 +28,6 @@ v2.0-20240919:
       - project2model
       - render
     queue: q1
-    hooks:
-      failure: fail_task
-      success: success_task
-      payload: 
-        hello: world
-        dummy: data
 
 
 # v2.0-20240919:

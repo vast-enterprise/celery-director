@@ -87,7 +87,7 @@ class WorkflowBuilder(object):
     def parse_wf(self, tasks, conditions, is_hook=False):
             full_canvas = self.parse_recursive(tasks, None, None, conditions, is_hook)
             return full_canvas
-        
+
     def parse_recursive(self, tasks, parent_type, parent, conditions, is_hook):
         previous = parent.phase.id if parent!=None else []
         canvas_phase = []
@@ -139,7 +139,7 @@ class WorkflowBuilder(object):
         self.canvas_phase.append(CanvasPhase(
             end.si(self.workflow.id).set(queue=self.queue),
         []))
-                                 
+
         if self.root_type == "group":
             self.canvas = group([ca.phase for ca in self.canvas_phase], task_id=uuid())
         else:
