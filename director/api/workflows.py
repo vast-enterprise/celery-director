@@ -40,6 +40,7 @@ def _execute_workflow(model_version, task_name, payload={}, comment=None):
 
     # Build the workflow and execute it
     data = obj.to_dict()
+    print(data)
     workflow = WorkflowBuilder(obj.id)
     workflow.run()
 
