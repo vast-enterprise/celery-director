@@ -109,7 +109,6 @@ class CeleryWorkflow:
                     continue
 
                 name = str(task.relative_to(folder))[:-3].replace("/", ".")
-                print(self.plugin_source.base.package + "." + name)
                 __import__(
                     self.plugin_source.base.package + "." + name,
                     globals(),
