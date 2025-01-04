@@ -32,7 +32,7 @@ def _execute_workflow(model_version, task_name, payload={}, comment=None):
     except WorkflowNotFound:
         abort(404, f"Workflow {fullname} not found")
 
-    task_id = payload.get("task_id", "unknown")
+    task_id = payload["task_id"]
         
     # Create the workflow in DB
     obj = Workflow(tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
