@@ -23,12 +23,11 @@ def _transform_yaml(data):
     如 v2.0-20240919:image2model
     """
     result = {}
-    for model_version, tasks in data.items():
-        if not tasks:
-            continue
-        for task, subtasks in tasks.items():
-            key = f"{model_version}:{task}"
-            result[key] = subtasks
+    for model_version, task_type_list in data.items():
+        for task_type in task_type_list:
+            for task, subtasks in task_type.items():
+                key = f"{model_version}:{task}"
+                result[key] = subtasks
     return result
 
 def _process_task_list(task_list, conditions, res_list):
@@ -55,7 +54,7 @@ class CeleryWorkflow:
         self.path = Path(self.app.config["DIRECTOR_HOME"]).resolve() / "workflows.yml"
         with open(self.path) as f:
             self.workflows = _transform_yaml(yaml.load(f, Loader=yaml.SafeLoader))
-            # self.workflows = yaml.load(f, Loader=yaml.SafeLoader)
+            # print(self.workflows)
         self.import_user_tasks()
         self.read_schemas()
 

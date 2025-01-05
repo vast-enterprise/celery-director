@@ -1,47 +1,81 @@
 v2.0-20240919:
-  image2model:
-    type: chain
-    tasks:
-      - photo_frame
-      - caption
-      - image2image
-      - GROUP1:
-          type: group
-          tasks:
-            - caption
-            - image2model
-      - empty_task
-      - GROUP2:
-          type: group
-          tasks:
-            - SUB_GROUP1:
-                type: chain
-                tasks:
-                  - texture
-                  - SUB_GROUP2:
-                      type: group
-                      tasks:
-                        - pbr
-                        - diffuse2normal
-                  - empty_task
-            - postprocess_stylize
-      - project2model
-      - render
-    queue: q1
+  - image_to_model:
+      # type 一定要在 image_to_model 下有缩进
+      type: chain
+      tasks:
+        - photo_frame
+        - caption
+        - image2image
+        - GROUP1:
+            type: group
+            tasks:
+              - caption
+              - image2model
+        - empty_task
+        - GROUP2:
+            type: group
+            tasks:
+              - SUB_GROUP1:
+                  type: chain
+                  tasks:
+                    - texture
+                    - SUB_GROUP2:
+                        type: group
+                        tasks:
+                          - pbr
+                          - diffuse2normal
+                    - empty_task
+              - postprocess_stylize
+        - project2model
+        - render
+      queue: q1
+
+  - text_to_model:
+      type: chain
+      tasks:
+        - translate
+        - text2image_pose
+        - text2image
+        - image2image
+        - GROUP1:
+            type: group
+            tasks:
+              - caption
+              - image2model
+        - empty_task
+        - GROUP2:
+            type: group
+            tasks:
+              - postprocess_stylize
+              - SUB_GROUP1:
+                  type: chain
+                  tasks:
+                    - texture
+                    - SUB_GROUP2:
+                        type: group
+                        tasks:
+                          - pbr
+                          - diffuse2normal
+                    - empty_task
+        - project2model
+        - render
+      queue: q1
 
 
-# v2.0-20240919:
-#   periodic_task:
-#     tasks:
-#       - EXTRACT
-#       - TRANSFORM
-#       - LOAD
-#     queue: q1
-#     periodic:
-#       interval: 5
-#       payload: 
-#         hello: world
-#         dummy: data
+periodic:
+  - clean:
+      tasks:
+        - clean_expired_tasks
+      queue: q2
+      periodic:
+        interval: 10
+
+  - upload_log:
+      tasks:
+        - upload_queue_info
+      queue: q2
+      periodic:
+        interval: 10
 
 
 # v2.0-20240919:
@@ -58,37 +92,6 @@ v2.0-20240919:
 #       payload: 
 #         hello: world
 #         dummy: data
-
-# ---
-# # Simple ETL example
-# #
-# # +-----------+      +-------------+      +--------+
-# # |  EXTRACT  +----->+  TRANSFORM  +----->+  LOAD  |
-# # +-----------+      +-------------+      +--------+
-# #
-# example.ETL:
-#   tasks:
-#     - EXTRACT
-#     - TRANSFORM
-#     - LOAD
-
-# # Group of tasks example
-# #
-# # +----------+       +----------+
-# # |  RANDOM  |       |  RANDOM  |
-# # +----+-----+       +-----+----+
-# #      |     +-------+     |
-# #      +---->+  ADD  <-----+
-# #            +-------+
-# #
-# example.RANDOMS:
-#   tasks:
-#     - GROUP_RANDOMS:
-#         type: group
-#         tasks:
-#           - RANDOM
-#           - RANDOM
-#     - ADD
 
 
 # example.NESTED_WORKFLOW:
@@ -113,6 +116,8 @@ v2.0-20240919:
 #                 - TASK_1
 #                 - TASK_2
 #           - TASK_C
+
+
 # example.NESTED_WORKFLOW_2_GROUP_CHAINED:
 #   type: chain
 #   tasks:
