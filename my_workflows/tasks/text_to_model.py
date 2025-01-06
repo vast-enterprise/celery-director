@@ -1,9 +1,11 @@
 from director import task
+from director.extensions import redis_client
 
 
 
 @task(name="translate", time_limit=180)
 def translate(*args, **kwargs):
+    redis_client.set('foo2', 'bar2')
     return "translate"
 
 @task(name="text2image_pose", time_limit=180)

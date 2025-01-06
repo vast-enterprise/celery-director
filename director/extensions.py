@@ -4,6 +4,7 @@ from pathlib import Path
 from json.decoder import JSONDecodeError
 
 import yaml
+import redis
 import sentry_sdk
 from celery import Celery
 from flask_sqlalchemy import SQLAlchemy
@@ -16,6 +17,8 @@ from sentry_sdk.utils import capture_internal_exceptions
 from celery.exceptions import SoftTimeLimitExceeded
 
 from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound
+
+
 
 def _transform_yaml(data):
     """
@@ -30,6 +33,7 @@ def _transform_yaml(data):
                 result[key] = subtasks
     return result
 
+
 def _process_task_list(task_list, conditions, res_list):
     for task in task_list:
         if isinstance(task, str): # 一定执行的任务
@@ -43,6 +47,7 @@ def _process_task_list(task_list, conditions, res_list):
             temp_list = []
             _process_task_list(task["parallel"], conditions, temp_list)
             res_list.append(temp_list)
+
 
 class CeleryWorkflow:
     def __init__(self):
@@ -244,3 +249,5 @@ schema = JsonSchema()
 cel = FlaskCelery("director")
 cel_workflows = CeleryWorkflow()
 sentry = DirectorSentry()
+
+redis_client = redis.from_url("redis://127.0.0.1:6379", db="2", decode_responses=True)
