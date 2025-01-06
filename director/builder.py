@@ -100,9 +100,9 @@ class WorkflowBuilder(object):
                 # 如果不执行把任务换成 skipped_task 以免破坏 pipeline 结构
                 if task in conditions and not conditions[task]:
                     # TODO 可能有更好办法？
-                    task = "skipped_task"
-
-                signature = self.new_task(task, previous, is_hook)
+                    signature = self.new_task("skipped_task", previous, is_hook, task)
+                else:
+                    signature = self.new_task(task, previous, is_hook)
                 canvas_phase.append(CanvasPhase(signature, signature.id))
             elif type(task) is dict:
                 task_name = list(task)[0]
