@@ -137,15 +137,15 @@ def run_workflow(ctx, fullname, payload, comment):
         raise click.Abort()
 
     # 在 payload 里面必须要有 task_id
-    if "task_id" not in payload:
+    if "task_id" not in payload["data"]:
         raise PayloadSyntaxError("task_id is not found in payload")
 
-    tripo_task_id = payload["task_id"]
+    task_id = payload["data"]["task_id"]
 
     # Create the workflow object
     # 把 v2.0-20240919:image2model 拆开
     model_version, task_name = fullname.split(":")
-    obj = Workflow(tripo_task_id=tripo_task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
+    obj = Workflow(tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
     obj.save()
 
     # Build the canvas and execute it
@@ -158,7 +158,7 @@ def run_workflow(ctx, fullname, payload, comment):
     conditions = payload.get("conditions", {})
     _workflow.run(conditions)
 
-    click.echo(f"Workflow {obj.id} for task {tripo_task_id} launched")
+    click.echo(f"Workflow {obj.id} for task {task_id} launched")
 
 
 @workflow.command(name="cancel")

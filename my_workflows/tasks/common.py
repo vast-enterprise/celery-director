@@ -49,5 +49,5 @@ def task_postrun_handler(sender=None, **kwargs):
     elif sender.name != "director.tasks.workflows.start" and sender.name != "director.tasks.workflows.end":
         task_name = kwargs["args"][0]
         workflow_id = kwargs["kwargs"]["workflow_id"]
-        task_id = kwargs["kwargs"]["payload"]["task_id"]
+        task_id = kwargs["kwargs"]["payload"]["data"]["task_id"]
         state = kwargs["state"]

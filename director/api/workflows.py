@@ -32,7 +32,7 @@ def _execute_workflow(model_version, task_name, payload={}, comment=None):
     except WorkflowNotFound:
         abort(404, f"Workflow {fullname} not found")
 
-    task_id = payload["task_id"]
+    task_id = payload["data"]["task_id"]
 
     # Create the workflow in DB
     obj = Workflow(tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
@@ -77,7 +77,7 @@ def create_workflow():
         request.get_json()["payload"],
         request.get_json().get("comment"),
     )
-    if "task_id" not in payload:
+    if "task_id" not in payload["data"]:
         return jsonify("no task_id in payload"), 400
 
     data, _ = _execute_workflow(project, name, payload, comment)
