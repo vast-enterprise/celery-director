@@ -61,7 +61,7 @@ class WorkflowBuilder(object):
                 task_id=task_id,
             )
 
-        if type(previous) != list:
+        if not isinstance(previous, list):
             previous = [previous]
 
         # Director task has the same UID
@@ -78,22 +78,22 @@ class WorkflowBuilder(object):
         return signature
 
     def parse_queues(self):
-        if type(self.queue) is dict:
+        if isinstance(self.queue, dict):
             self.custom_queues = self.queue.get("customs", {})
             self.queue = self.queue.get("default", "celery")
-        if type(self.queue) is not str or type(self.custom_queues) is not dict:
+        if not (isinstance(self.queue, str) and isinstance(self.custom_queues, dict)):
             raise WorkflowSyntaxError()
-    
+
     def parse_wf(self, tasks, conditions, is_hook=False):
-            full_canvas = self.parse_recursive(tasks, None, None, conditions, is_hook)
-            return full_canvas
+        full_canvas = self.parse_recursive(tasks, None, None, conditions, is_hook)
+        return full_canvas
 
     def parse_recursive(self, tasks, parent_type, parent, conditions, is_hook):
-        previous = parent.phase.id if parent!=None else []
+        previous = parent.phase.id if parent is not None else []
         canvas_phase = []
-        for task in tasks:  
-            if type(task) is str:
-                if len(canvas_phase) > 0 and parent_type!="group":
+        for task in tasks:
+            if isinstance(task, str):
+                if len(canvas_phase) > 0 and parent_type != "group":
                     previous = canvas_phase[-1].previous
 
                 # 在这根据 conditions 判断一下任务是否是被跳过的
@@ -104,31 +104,30 @@ class WorkflowBuilder(object):
                 else:
                     signature = self.new_task(task, previous, is_hook)
                 canvas_phase.append(CanvasPhase(signature, signature.id))
-            elif type(task) is dict:
+            elif isinstance(task, dict):
                 task_name = list(task)[0]
                 task_type = task[task_name]["type"]
                 if "type" not in task[task_name] \
                     and (task[task_name]["type"] != "group" \
                         or task[task_name]["type"] != "chain"):
                     raise WorkflowSyntaxError()
-                
+
                 current = None
-                if len(canvas_phase) > 0 and parent_type!="group":
+                if len(canvas_phase) > 0 and parent_type != "group":
                     current = canvas_phase[-1]
                 else:
                     current = parent
-                canvas_phase.append(self.parse_recursive(task[task_name]["tasks"], task_type, current, conditions, is_hook))   
+                canvas_phase.append(self.parse_recursive(task[task_name]["tasks"], task_type, current, conditions, is_hook))
             else:
                 raise WorkflowSyntaxError()
-                        
+
         if parent_type == "chain":
             chain_previous = canvas_phase[-1].phase.id
             return CanvasPhase(chain([ca.phase for ca in canvas_phase]), chain_previous)
-        elif parent_type == "group":
+        if parent_type == "group":
             group_previous = [ca.previous for ca in canvas_phase]
             return CanvasPhase(group([ca.phase for ca in canvas_phase]), group_previous)
-        else:
-            return canvas_phase
+        return canvas_phase
 
     def build(self, conditions):
         self.parse_queues()
