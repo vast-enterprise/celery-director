@@ -17,32 +17,6 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound
 
-def _transform_yaml(data):
-    """
-    把 yaml 里面的版本号和任务名称合成一个名字(原本有层级关系), 用冒号: 相连
-    如 v2.0-20240919:image2model
-    """
-    result = {}
-    for model_version, task_type_list in data.items():
-        for task_type in task_type_list:
-            for task, subtasks in task_type.items():
-                key = f"{model_version}:{task}"
-                result[key] = subtasks
-    return result
-
-def _process_task_list(task_list, conditions, res_list):
-    for task in task_list:
-        if isinstance(task, str): # 一定执行的任务
-            if conditions.get(f"do_{task}", True):
-                res_list.append(task)
-        elif "parallel" not in task: # 有条件执行的任务
-            task_name = list(task.keys())[0]
-            if conditions.get(f"do_{task_name}", True):
-                res_list.append(task_name)
-        else: # 可以 parallel 执行的任务
-            temp_list = []
-            _process_task_list(task["parallel"], conditions, temp_list)
-            res_list.append(temp_list)
 
 class CeleryWorkflow:
     def __init__(self):
@@ -53,8 +27,8 @@ class CeleryWorkflow:
         self.app = app
         self.path = Path(self.app.config["DIRECTOR_HOME"]).resolve() / "workflows.yml"
         with open(self.path) as f:
-            self.workflows = _transform_yaml(yaml.load(f, Loader=yaml.SafeLoader))
-            # print(self.workflows)
+            self.workflows = yaml.load(f, Loader=yaml.SafeLoader)
+
         self.import_user_tasks()
         self.read_schemas()
 
@@ -66,12 +40,6 @@ class CeleryWorkflow:
 
     def get_tasks(self, name):
         return self.get_by_name(name)["tasks"]
-
-    def get_type(self, name):
-        try:
-            return self.get_by_name(name)["type"]
-        except KeyError:
-            return "chain"
 
     def get_hook_task(self, name, hook_name):
         if (
