@@ -24,3 +24,8 @@ cli.add_command(db)
 cli.add_command(user)
 cli.add_command(dlassets)
 cli.add_command(init)
+
+
+# 本地测试
+if __name__ == "__main__":
+    cli()

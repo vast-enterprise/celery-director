@@ -35,7 +35,7 @@ class WorkflowBuilder(object):
             self._workflow = Workflow.query.filter_by(id=self.workflow_id).first()
         return self._workflow
 
-    def new_task(self, task_name, is_hook, single=True):
+    def new_task(self, task_name, previous, is_hook):
         task_id = uuid()
 
         queue = self.custom_queues.get(task_name, self.queue)
@@ -47,56 +47,69 @@ class WorkflowBuilder(object):
             task_id=task_id,
         )
 
+        previous_ids = []
+        if isinstance(previous, (chain, group)):
+            for previous_task in previous.tasks:
+                previous_ids.append(previous_task.id)
+        elif previous is not None:
+            previous_ids = [previous.id]
+
         # Director task has the same UID
         task = Task(
             id=task_id,
             key=task_name,
-            previous=self.previous,
             workflow_id=self.workflow.id,
+            previous=previous_ids,
             status=StatusType.pending,
             is_hook=is_hook,
         )
         task.save()
 
-        if single:
-            self.previous = [signature.id]
-
         return signature
 
     def parse_queues(self):
-        if type(self.queue) is dict:
+        if isinstance(self.queue, dict):
             self.custom_queues = self.queue.get("customs", {})
             self.queue = self.queue.get("default", "celery")
-        if type(self.queue) is not str or type(self.custom_queues) is not dict:
+        if not (isinstance(self.queue, str) and isinstance(self.custom_queues, dict)):
             raise WorkflowSyntaxError()
 
-    def parse(self, tasks, is_hook=False):
-        canvas = []
+    def parse_wf(self, tasks, payload, is_hook=False):
+        return self.parse_dag(tasks, None, None, payload, is_hook)
 
+    def parse_dag(self, tasks, payload=None, is_hook=False, src_parents=None, is_group=False):
+        canvas_tasks = []
+        parents = src_parents
         for task in tasks:
-            if type(task) is str:
-                signature = self.new_task(task, is_hook)
-                canvas.append(signature)
-            elif type(task) is dict:
-                name = list(task)[0]
-                if "type" not in task[name] and task[name]["type"] != "group":
-                    raise WorkflowSyntaxError()
-
-                sub_canvas_tasks = [
-                    self.new_task(t, is_hook, single=False) for t in task[name]["tasks"]
-                ]
-
-                sub_canvas = group(*sub_canvas_tasks, task_id=uuid())
-                canvas.append(sub_canvas)
-                self.previous = [s.id for s in sub_canvas_tasks]
+            if is_group:
+                parents = src_parents
+            if isinstance(task, dict):
+                if "GROUP" in task:
+                    if not isinstance(task["GROUP"], list):
+                        raise WorkflowSyntaxError()
+                    parents = self.parse_dag(task["GROUP"], payload,
+                                        is_hook, parents,
+                                        is_group=True)
+                else:
+                    # add task
+                    ((task_name, condition),) = task.items()
+                    if payload is None or payload.get(condition, True):
+                        parents = self.new_task(task_name, parents, is_hook)
+            elif isinstance(task, list):
+                parents = self.parse_dag(task, payload, is_hook, parents, is_group=False)
+            elif isinstance(task, str):
+                # add task
+                parents = self.new_task(task, parents, is_hook)
             else:
                 raise WorkflowSyntaxError()
+            canvas_tasks.append(parents)
+        if is_group:
+            return group(*canvas_tasks, task_id=uuid())
+        return chain(*canvas_tasks, task_id=uuid())
 
-        return canvas
-
-    def build(self):
+    def build(self, payload):
         self.parse_queues()
-        self.canvas = self.parse(self.tasks)
+        self.canvas = self.parse_wf(self.tasks, payload)
         self.canvas.insert(0, start.si(self.workflow.id).set(queue=self.queue))
         self.canvas.append(end.si(self.workflow.id).set(queue=self.queue))
 
@@ -116,20 +129,21 @@ class WorkflowBuilder(object):
 
         if self.success_hook and not self.success_hook_canvas:
             self.previous = None
-            self.success_hook_canvas = [self.parse([self.success_hook], True)[0]]
+            self.success_hook_canvas = [self.parse_wf([self.success_hook], {}, True)[0]]
 
         self.previous = initial_previous
 
-    def run(self):
+    def run(self, payload={}):
         if not self.canvas:
-            self.build()
-
-        canvas = chain(*self.canvas, task_id=uuid())
-
+            self.build(conditions)
         self.build_hooks()
 
+        priority = 1
+        if payload is not None and "priority" in payload:
+            priority = 10 - payload["priority"]
         try:
-            return canvas.apply_async(
+            return self.canvas.apply_async(
+                priority=priority,
                 link=self.success_hook_canvas,
                 link_error=self.failure_hook_canvas,
             )

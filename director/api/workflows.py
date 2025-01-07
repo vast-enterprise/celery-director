@@ -21,8 +21,8 @@ def _get_workflow(workflow_id):
     return workflow
 
 
-def _execute_workflow(project, name, payload={}, comment=None):
-    fullname = f"{project}.{name}"
+def _execute_workflow(model_version, task_name, payload={}, comment=None):
+    fullname = f"{model_version}:{task_name}"
 
     # Check if the workflow exists
     try:
@@ -32,14 +32,17 @@ def _execute_workflow(project, name, payload={}, comment=None):
     except WorkflowNotFound:
         abort(404, f"Workflow {fullname} not found")
 
+    task_id = payload["data"]["task_id"]
+
     # Create the workflow in DB
-    obj = Workflow(project=project, name=name, payload=payload, comment=comment)
+    obj = Workflow(tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
     obj.save()
 
     # Build the workflow and execute it
     data = obj.to_dict()
     workflow = WorkflowBuilder(obj.id)
-    workflow.run()
+    conditions = payload["conditions"]
+    workflow.run(conditions)
 
     app.logger.info(f"Workflow sent : {workflow.canvas}")
     return obj.to_dict(), workflow
@@ -74,6 +77,9 @@ def create_workflow():
         request.get_json()["payload"],
         request.get_json().get("comment"),
     )
+    if "task_id" not in payload["data"]:
+        return jsonify("no task_id in payload"), 400
+
     data, _ = _execute_workflow(project, name, payload, comment)
     return jsonify(data), 201
 
@@ -84,7 +90,7 @@ def relaunch_workflow(workflow_id):
     obj = _get_workflow(workflow_id)
     if hasattr(obj, "comment"):
         comment = obj.comment
-    data, _ = _execute_workflow(obj.project, obj.name, obj.payload, comment)
+    data, _ = _execute_workflow(obj.model_version, obj.task_name, obj.payload, comment)
     return jsonify(data), 201
 
 
@@ -114,7 +120,7 @@ def list_workflows():
         "per_page", type=int, default=app.config["WORKFLOWS_PER_PAGE"]
     )
     workflows = Workflow.query.order_by(Workflow.created_at.desc()).paginate(
-        page, per_page
+        page=page, per_page=per_page
     )
     return jsonify([w.to_dict(with_payload=with_payload) for w in workflows.items])
 
