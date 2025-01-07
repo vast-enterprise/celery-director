@@ -1,41 +1,40 @@
-v2.0-20240919:
-  - image_to_model:
-      tasks:
-        - photo_frame: condition_photo_frame
-        - caption: condition_image2image
-        - image2image: condition_image2image
+v2.0-20240919:image_to_model:
+  tasks:
+    - photo_frame: condition_photo_frame
+    - caption: condition_image2image
+    - image2image: condition_image2image
+    - GROUP:
+      - caption: condition_normal_caption
+      - image2model: condition_normal
+    - GROUP:
+      - postprocess_stylize: condition_normal
+      -
+        - texture: condition_texture
         - GROUP:
-          - caption: condition_normal_caption
-          - image2model: condition_normal
-        - GROUP:
-          - postprocess_stylize: condition_normal
-          -
-            - texture: condition_texture
-            - GROUP:
-              - pbr: condition_pbr
-              - diffuse2normal: condition_pbr
-        - project2model: condition_texture
-        - render
-      queue: q1
+          - pbr: condition_pbr
+          - diffuse2normal: condition_pbr
+    - project2model: condition_texture
+    - render
+  queue: q1
 
-  - text_to_model:
-      tasks:
-        - text2image_pose: condition_pose_prompt
-        - text2image: condition_not_pose_prompt
-        - image2image: condition_image2image
+v2.0-20240919:text_to_model:
+  tasks:
+    - text2image_pose: condition_pose_prompt
+    - text2image: condition_not_pose_prompt
+    - image2image: condition_image2image
+    - GROUP:
+      - caption: condition_autosize
+      - image2model: condition_normal
+    - GROUP:
+      - postprocess_stylize
+      -
+        - texture: condition_texture
         - GROUP:
-          - caption: condition_autosize
-          - image2model: condition_normal
-        - GROUP:
-          - postprocess_stylize
-          -
-            - texture: condition_texture
-            - GROUP:
-              - pbr: condition_pbr
-              - diffuse2normal: condition_pbr
-        - project2model: condition_texture
-        - render
-      queue: q1
+          - pbr: condition_pbr
+          - diffuse2normal: condition_pbr
+    - project2model: condition_texture
+    - render
+  queue: q1
 
 periodic:
   - clean:
