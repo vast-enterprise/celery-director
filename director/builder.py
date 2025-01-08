@@ -165,7 +165,8 @@ class WorkflowBuilder(object):
 
         self.previous = initial_previous
 
-    def run(self, priority = 1, conditions = {}):
+    # priority 最低是 0, 最高是 9
+    def run(self, priority = 9, conditions = {}):
         if not self.canvas:
             self.build(conditions)
         self.build_hooks()
