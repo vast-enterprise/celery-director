@@ -85,8 +85,8 @@ class WorkflowBuilder(object):
             raise WorkflowSyntaxError()
     
     def parse_wf(self, tasks, conditions, is_hook=False):
-            full_canvas = self.parse_recursive(tasks, None, None, conditions, is_hook)
-            return full_canvas
+        full_canvas = self.parse_recursive(tasks, None, None, conditions, is_hook)
+        return full_canvas
 
     def parse_recursive(self, tasks, parent_type, parent, conditions, is_hook):
         previous = parent.phase.id if parent!=None else []

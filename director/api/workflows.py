@@ -72,6 +72,8 @@ def _cancel_workflow(obj):
         },
     }
 )
+
+
 def create_workflow():
     project, name, payload, comment = (
         request.get_json()["project"],
@@ -81,6 +83,8 @@ def create_workflow():
     )
     if "task_id" not in payload["data"]:
         return jsonify("no task_id in payload"), 400
+    if "priority" not in payload["data"] or "norm_priority" not in payload["data"] :
+        return jsonify("no priority or norm_priority in payload"), 400
 
     data, _ = _execute_workflow(project, name, payload, comment)
     return jsonify(data), 201
