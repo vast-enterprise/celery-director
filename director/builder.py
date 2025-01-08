@@ -165,7 +165,7 @@ class WorkflowBuilder(object):
 
         self.previous = initial_previous
 
-    def run(self, conditions = {}):
+    def run(self, priority = 1, conditions = {}):
         if not self.canvas:
             self.build(conditions)
         self.build_hooks()
@@ -173,6 +173,7 @@ class WorkflowBuilder(object):
         try:
             # TODO send task
             return self.canvas.apply_async(
+                priority=priority,
                 # 成功的 hook 会在运行 workflow 的同一个 worker 执行
                 link=self.success_hook_canvas,
                 # 失败的 hook 会在 celery beat 执行
