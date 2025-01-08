@@ -72,8 +72,6 @@ def _cancel_workflow(obj):
         },
     }
 )
-
-
 def create_workflow():
     project, name, payload, comment = (
         request.get_json()["project"],
@@ -147,7 +145,7 @@ def get_workflow(workflow_id):
 def list_definitions():
     workflow_definitions = []
     for fullname, definition in sorted(cel_workflows.workflows.items()):
-        project, name = fullname.split(".", 1)
+        project, name = fullname.split(":", 1)
         workflow_definitions.append(
             {"fullname": fullname, "project": project, "name": name, **definition}
         )

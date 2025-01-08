@@ -41,25 +41,19 @@ class WorkflowBuilder(object):
             self._workflow = Workflow.query.filter_by(id=self.workflow_id).first()
         return self._workflow
 
-    def new_task(self, task_name, previous, is_hook, original_task_name=None):
+    def new_task(self, task_name, previous, is_hook, is_skipped):
         task_id = uuid()
 
         queue = self.custom_queues.get(task_name, self.queue)
 
-        if original_task_name:
-            # We create the Celery task specifying its UID
-            signature = cel.tasks.get(task_name).subtask(
-                kwargs={"workflow_id": self.workflow_id, "payload": self.workflow.payload, "original_task_name": original_task_name},
-                queue=queue,
-                task_id=task_id,
-            )
-        else:
-            # We create the Celery task specifying its UID
-            signature = cel.tasks.get(task_name).subtask(
-                kwargs={"workflow_id": self.workflow_id, "payload": self.workflow.payload},
-                queue=queue,
-                task_id=task_id,
-            )
+        # We create the Celery task specifying its UID
+        signature = cel.tasks.get(task_name).subtask(
+            kwargs={"workflow_id": self.workflow_id,
+                    "payload": self.workflow.payload,
+                    "is_skipped": is_skipped},
+            queue=queue,
+            task_id=task_id,
+        )
 
         if type(previous) != list:
             previous = [previous]
@@ -91,19 +85,21 @@ class WorkflowBuilder(object):
     def parse_recursive(self, tasks, parent_type, parent, conditions, is_hook):
         previous = parent.phase.id if parent!=None else []
         canvas_phase = []
-        for task in tasks:  
-            if type(task) is str:
+        for task in tasks:
+            # 如果不是 GROUP 任务
+            if type(task) is tuple or type(task) is str:
                 if len(canvas_phase) > 0 and parent_type!="group":
                     previous = canvas_phase[-1].previous
 
-                # 在这根据 conditions 判断一下任务是否是被跳过的
-                # 如果不执行把任务换成 skipped_task 以免破坏 pipeline 结构
-                if task in conditions and not conditions[task]:
-                    # TODO 可能有更好办法？
-                    signature = self.new_task("skipped_task", previous, is_hook, task)
-                else:
-                    signature = self.new_task(task, previous, is_hook)
+                task_name, is_skipped = task, False
+                if type(task) is tuple:
+                    task_name = task[0]
+                    condition_key = task[1]
+                    is_skipped = condition_key in conditions and not conditions[condition_key]
+
+                signature = self.new_task(task_name, previous, is_hook, is_skipped)
                 canvas_phase.append(CanvasPhase(signature, signature.id))
+            # GROUP 或者 CHAIN 任务
             elif type(task) is dict:
                 task_name = list(task)[0]
                 task_type = task[task_name]["type"]

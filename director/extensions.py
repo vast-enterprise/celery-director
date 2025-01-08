@@ -20,33 +20,62 @@ from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound
 
 
 
-def _transform_yaml(data):
-    """
-    把 yaml 里面的版本号和任务名称合成一个名字(原本有层级关系), 用冒号: 相连
-    如 v2.0-20240919:image2model
-    """
-    result = {}
-    for model_version, task_type_list in data.items():
-        for task_type in task_type_list:
-            for task, subtasks in task_type.items():
-                key = f"{model_version}:{task}"
-                result[key] = subtasks
-    return result
+def _expand_task_structure(task_structure, group_counter=0, chain_counter=0, group_prefix='GROUP', chain_prefix='CHAIN'):
+    if isinstance(task_structure, list):
+        expanded_tasks = []
+        for task_in_list in task_structure:
+            # dict 说明是普通任务或 GROUP
+            if isinstance(task_in_list, dict):
+                for key, value in task_in_list.items():
+                    # 如果是 GROUP 任务, 递归
+                    if key == group_prefix:
+                        group_name = f"{group_prefix}_{group_counter}"
+                        group_counter += 1
+                        expanded_group = {
+                            group_name: {
+                                'type': 'group',
+                                'tasks': _expand_task_structure(value, group_counter, chain_counter)
+                            }
+                        }
+                        expanded_tasks.append(expanded_group)
+                    else: # 如果是普通任务直接添加, 例如 {"task_1": "condition_task_1"}
+                        # 转化为 tuple 方便条件判断 ("task_1", "condition_task_1")
+                        (task_name, condtion_name), = task_in_list.items()
+                        expanded_tasks.append((task_name, condtion_name))
+            # 如果是 list 说明这是一个 chain, 对列表中每个任务递归
+            elif isinstance(task_in_list, list):
+                chain_name = f"{chain_prefix}_{chain_counter}"
+                chain_counter += 1
+                expanded_chain = {
+                            chain_name: {
+                                'type': 'chain',
+                                'tasks': _expand_task_structure(task_in_list, group_counter, chain_counter)
+                            }
+                        }
+                expanded_tasks.append(expanded_chain)
+            # 如果是其他类型, 只能是字符串, 直接添加, 例如 "render"
+            else:
+                expanded_tasks.append(task_in_list)
+        return expanded_tasks
+    return task_structure
 
 
-def _process_task_list(task_list, conditions, res_list):
-    for task in task_list:
-        if isinstance(task, str): # 一定执行的任务
-            if conditions.get(f"do_{task}", True):
-                res_list.append(task)
-        elif "parallel" not in task: # 有条件执行的任务
-            task_name = list(task.keys())[0]
-            if conditions.get(f"do_{task_name}", True):
-                res_list.append(task_name)
-        else: # 可以 parallel 执行的任务
-            temp_list = []
-            _process_task_list(task["parallel"], conditions, temp_list)
-            res_list.append(temp_list)
+def expand_yaml_task_structure(yaml_data):
+    expand_yaml = {}
+    for task_name, tasks in yaml_data.items():
+        # 例如 v2.0-20240919:image_to_model, 下一层即是 tasks
+        if isinstance(tasks, dict) and "tasks" in tasks:
+            tasks["tasks"] = _expand_task_structure(tasks["tasks"])
+            tasks["type"] = "chain"
+            expand_yaml[task_name] = tasks
+        # 例如 periodic, 下一层是 task 的 list
+        else:
+            for task in tasks:
+                for key, val in task.items():
+                    val["tasks"] = _expand_task_structure(val["tasks"])
+                    val["type"] = "chain"
+                    expand_yaml[f"{task_name}:{key}"] = val
+    return expand_yaml
 
 
 class CeleryWorkflow:
@@ -58,8 +87,7 @@ class CeleryWorkflow:
         self.app = app
         self.path = Path(self.app.config["DIRECTOR_HOME"]).resolve() / "workflows.yml"
         with open(self.path) as f:
-            self.workflows = _transform_yaml(yaml.load(f, Loader=yaml.SafeLoader))
-            # print(self.workflows)
+            self.workflows = expand_yaml_task_structure(yaml.load(f, Loader=yaml.SafeLoader))
         self.import_user_tasks()
         self.read_schemas()
 
