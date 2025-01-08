@@ -41,7 +41,7 @@ def _execute_workflow(model_version, task_name, payload={}, comment=None):
     obj.save()
 
     # Build the workflow and execute it
-    data = obj.to_dict()
+    _ = obj.to_dict()
     workflow = WorkflowBuilder(obj.id)
     conditions = payload["conditions"]
     workflow.run(norm_priority, conditions)
