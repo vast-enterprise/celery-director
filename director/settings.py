@@ -68,7 +68,11 @@ class Config(object):
             "result_backend": env.str(
                 "DIRECTOR_RESULT_BACKEND_URI", "redis://localhost:6379/1"
             ),
-            "broker_transport_options": {"master_name": "director"},
+            "broker_transport_options": {
+                "master_name": "director",
+                'queue_order_strategy': 'priority', # 开启 priority 逻辑
+                "sep": ":",
+            },
         }
 
         # Sentry configuration

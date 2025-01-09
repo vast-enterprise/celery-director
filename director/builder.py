@@ -41,7 +41,7 @@ class WorkflowBuilder(object):
             self._workflow = Workflow.query.filter_by(id=self.workflow_id).first()
         return self._workflow
 
-    def new_task(self, task_name, previous, is_hook, is_skipped):
+    def new_task(self, task_name, previous, is_hook, is_skipped, priority):
         task_id = uuid()
 
         queue = self.custom_queues.get(task_name, self.queue)
@@ -54,7 +54,9 @@ class WorkflowBuilder(object):
             queue=queue,
             task_id=task_id,
         )
-
+        # 设置优先级
+        signature.set(priority=priority)
+        
         if type(previous) != list:
             previous = [previous]
 
@@ -78,11 +80,11 @@ class WorkflowBuilder(object):
         if type(self.queue) is not str or type(self.custom_queues) is not dict:
             raise WorkflowSyntaxError()
     
-    def parse_wf(self, tasks, conditions, is_hook=False):
-        full_canvas = self.parse_recursive(tasks, None, None, conditions, is_hook)
+    def parse_wf(self, tasks, conditions, priority, is_hook=False):
+        full_canvas = self.parse_recursive(tasks, None, None, conditions, priority, is_hook)
         return full_canvas
 
-    def parse_recursive(self, tasks, parent_type, parent, conditions, is_hook):
+    def parse_recursive(self, tasks, parent_type, parent, conditions, priority, is_hook):
         previous = parent.phase.id if parent!=None else []
         canvas_phase = []
         for task in tasks:
@@ -97,7 +99,7 @@ class WorkflowBuilder(object):
                     condition_key = task[1]
                     is_skipped = condition_key in conditions and not conditions[condition_key]
 
-                signature = self.new_task(task_name, previous, is_hook, is_skipped)
+                signature = self.new_task(task_name, previous, is_hook, is_skipped, priority)
                 canvas_phase.append(CanvasPhase(signature, signature.id))
             # GROUP 或者 CHAIN 任务
             elif type(task) is dict:
@@ -126,9 +128,9 @@ class WorkflowBuilder(object):
         else:
             return canvas_phase
 
-    def build(self, conditions):
+    def build(self, conditions, priority):
         self.parse_queues()
-        self.canvas_phase = self.parse_wf(self.tasks, conditions)
+        self.canvas_phase = self.parse_wf(self.tasks, conditions, priority)
         self.canvas_phase.insert(0, CanvasPhase(
             start.si(self.workflow.id).set(queue=self.queue),
         []))
@@ -164,13 +166,13 @@ class WorkflowBuilder(object):
     # priority 最低是 0, 最高是 9
     def run(self, priority = 9, conditions = {}):
         if not self.canvas:
-            self.build(conditions)
+            # 为每个 task 单独设置 priority
+            self.build(conditions, priority)
         self.build_hooks()
 
         try:
             # TODO send task
             return self.canvas.apply_async(
-                priority=priority,
                 # 成功的 hook 会在运行 workflow 的同一个 worker 执行
                 link=self.success_hook_canvas,
                 # 失败的 hook 会在 celery beat 执行
