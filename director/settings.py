@@ -32,8 +32,8 @@ class Config(object):
                 )
             env_path = config_path
 
+        # 环境变量已在 main.py 设置, 不在这里读取 .env 文件
         env = Env()
-        env.read_env(env_path)
 
         self.ENABLE_HISTORY_MODE = env.bool("DIRECTOR_ENABLE_HISTORY_MODE", False)
         self.ENABLE_CDN = env.bool("DIRECTOR_ENABLE_CDN", True)
