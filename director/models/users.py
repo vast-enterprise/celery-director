@@ -10,7 +10,7 @@ from director.models.utils import JSONBType
 
 
 class User(BaseModel):
-    __tablename__ = "users"
+    __tablename__ = "celery_users"
 
     username = db.Column(db.String(255), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)

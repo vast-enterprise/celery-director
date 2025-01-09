@@ -4,7 +4,7 @@ from director.models.utils import JSONBType
 
 
 class Workflow(BaseModel):
-    __tablename__ = "workflows"
+    __tablename__ = "celery_workflows"
 
     tripo_task_id = db.Column(db.String(255), nullable=False, index=True)
     task_name = db.Column(db.String(255), nullable=False)

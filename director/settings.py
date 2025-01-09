@@ -22,6 +22,8 @@ class Config(object):
         if not home_path or not Path(home_path).resolve().exists():
             raise ValueError("environment variable DIRECTOR_HOME is not set correctly")
 
+        env = Env()
+
         env_path = Path(home_path) / ".env"
         self.DIRECTOR_HOME = str(home_path)
 
@@ -31,9 +33,7 @@ class Config(object):
                     "environment variable DIRECTOR_CONFIG is not set correctly"
                 )
             env_path = config_path
-
-        # 环境变量已在 main.py 设置, 不在这里读取 .env 文件
-        env = Env()
+            env.read_env(env_path)
 
         self.ENABLE_HISTORY_MODE = env.bool("DIRECTOR_ENABLE_HISTORY_MODE", False)
         self.ENABLE_CDN = env.bool("DIRECTOR_ENABLE_CDN", True)

@@ -9,7 +9,7 @@ from director.models.utils import JSONBType
 
 
 class Task(BaseModel):
-    __tablename__ = "tasks"
+    __tablename__ = "celery_tasks"
 
     key = db.Column(db.String(255), nullable=False)
     status = db.Column(db.Enum(StatusType), default=StatusType.pending, nullable=False)
@@ -20,7 +20,7 @@ class Task(BaseModel):
     # Relationship
     workflow_id = db.Column(
         UUIDType(binary=False),
-        db.ForeignKey("workflows.id", ondelete="cascade"),
+        db.ForeignKey("celery_workflows.id", ondelete="cascade"),
         nullable=False,
         index=True,
     )
