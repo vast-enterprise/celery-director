@@ -33,7 +33,7 @@ def _execute_workflow(model_version, task_name, payload={}, comment=None):
         abort(404, f"Workflow {fullname} not found")
 
     task_id = payload["data"]["task_id"]
-    # priority 调整到了 0 - 9
+    # norm_priority 的范围是 0 - 9
     norm_priority = payload["data"]["norm_priority"]
 
     # Create the workflow in DB
@@ -44,7 +44,8 @@ def _execute_workflow(model_version, task_name, payload={}, comment=None):
     _ = obj.to_dict()
     workflow = WorkflowBuilder(obj.id)
     conditions = payload["conditions"]
-    workflow.run(norm_priority, conditions)
+    queues = payload["queues"]
+    workflow.run(queues, norm_priority, conditions)
 
     app.logger.info(f"Workflow sent : {workflow.canvas}")
     return obj.to_dict(), workflow

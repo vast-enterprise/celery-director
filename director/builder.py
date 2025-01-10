@@ -41,10 +41,12 @@ class WorkflowBuilder(object):
             self._workflow = Workflow.query.filter_by(id=self.workflow_id).first()
         return self._workflow
 
-    def new_task(self, task_name, previous, is_hook, is_skipped, priority):
+    def new_task(self, task_name, previous, is_hook, is_skipped, priority, assigned_queue):
         task_id = uuid()
 
         queue = self.custom_queues.get(task_name, self.queue)
+        if assigned_queue:
+            queue = assigned_queue
 
         # We create the Celery task specifying its UID
         signature = cel.tasks.get(task_name).subtask(
@@ -80,11 +82,11 @@ class WorkflowBuilder(object):
         if type(self.queue) is not str or type(self.custom_queues) is not dict:
             raise WorkflowSyntaxError()
     
-    def parse_wf(self, tasks, conditions, priority, is_hook=False):
-        full_canvas = self.parse_recursive(tasks, None, None, conditions, priority, is_hook)
+    def parse_wf(self, tasks, queues, conditions, priority, is_hook=False):
+        full_canvas = self.parse_recursive(tasks, None, None, queues, conditions, priority, is_hook)
         return full_canvas
 
-    def parse_recursive(self, tasks, parent_type, parent, conditions, priority, is_hook):
+    def parse_recursive(self, tasks, parent_type, parent, queues, conditions, priority, is_hook):
         previous = parent.phase.id if parent!=None else []
         canvas_phase = []
         for task in tasks:
@@ -98,8 +100,9 @@ class WorkflowBuilder(object):
                     task_name = task[0]
                     condition_key = task[1]
                     is_skipped = condition_key in conditions and not conditions[condition_key]
+                assigned_queue = queues[task_name]
 
-                signature = self.new_task(task_name, previous, is_hook, is_skipped, priority)
+                signature = self.new_task(task_name, previous, is_hook, is_skipped, priority, assigned_queue)
                 canvas_phase.append(CanvasPhase(signature, signature.id))
             # GROUP 或者 CHAIN 任务
             elif type(task) is dict:
@@ -115,7 +118,7 @@ class WorkflowBuilder(object):
                     current = canvas_phase[-1]
                 else:
                     current = parent
-                canvas_phase.append(self.parse_recursive(task[task_name]["tasks"], task_type, current, conditions, priority, is_hook))   
+                canvas_phase.append(self.parse_recursive(task[task_name]["tasks"], task_type, current, queues, conditions, priority, is_hook))   
             else:
                 raise WorkflowSyntaxError()
                         
@@ -128,9 +131,9 @@ class WorkflowBuilder(object):
         else:
             return canvas_phase
 
-    def build(self, conditions, priority):
+    def build(self, queues, conditions, priority):
         self.parse_queues()
-        self.canvas_phase = self.parse_wf(self.tasks, conditions, priority)
+        self.canvas_phase = self.parse_wf(self.tasks, queues, conditions, priority)
         self.canvas_phase.insert(0, CanvasPhase(
             start.si(self.workflow.id).set(queue=self.queue),
         []))
@@ -164,10 +167,10 @@ class WorkflowBuilder(object):
         self.previous = initial_previous
 
     # priority 最低是 0, 最高是 9
-    def run(self, priority = 9, conditions = {}):
+    def run(self, queues, priority = 9, conditions = {}):
         if not self.canvas:
             # 为每个 task 单独设置 priority
-            self.build(conditions, priority)
+            self.build(queues, conditions, priority)
         self.build_hooks()
 
         try:
