@@ -9,7 +9,7 @@ from flask import Flask, Blueprint, jsonify, request, render_template
 from werkzeug.exceptions import HTTPException
 
 from director.api import api_bp
-from director.extensions import cel, cel_workflows, db, schema, sentry, migrate
+from director.extensions import cel, cel_workflows, db, schema, sentry, migrate, redis_client, kafka_client
 from director.settings import Config, UserConfig
 from director.tasks.base import BaseTask
 from director.utils import build_celery_schedule
@@ -80,6 +80,17 @@ def create_app(
     cel.init_app(app)
     cel_workflows.init_app(app)
     sentry.init_app(app)
+    redis_client.init_redis(app)
+    kafka_client.init_kafka(app, {
+        'bootstrap.servers': config.get("KAFKA_HOST"),
+        'sasl.username':     config.get("KAFKA_USERNAME"),
+        'sasl.password':     config.get("KAFKA_PASSWORD"),
+        'acks':              'all',
+        'enable.idempotence': True,
+        "retries": 3,
+        'security.protocol': config.get("SECURITY_PROTOCOL"),
+        'sasl.mechanisms':   config.get("SASL_MECHANISM"),
+    })
 
     # Dict passed to the cleanup function
     retentions = {}
