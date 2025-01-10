@@ -1,11 +1,16 @@
+import os
 import imp
 import json
 from pathlib import Path
 from json.decoder import JSONDecodeError
 
+import uuid
 import yaml
 import redis
+import requests
 import sentry_sdk
+import confluent_kafka
+from confluent_kafka import KafkaException
 from celery import Celery
 from flask_sqlalchemy import SQLAlchemy
 from flask_json_schema import JsonSchema, JsonValidationError
@@ -260,6 +265,72 @@ class DirectorSentry:
         return event_processor
 
 
+# Redis Extension
+class RedisClient:
+    def __init__(self):
+        self.app = None
+        self.conn = None
+
+    def init_redis(self, app):
+        self.app = app
+        self.conn = redis.from_url(os.getenv('REDIS_URL'), db=os.getenv('ALGO_REDIS_DB'), decode_responses=True)
+    
+    def ping(self):
+        return self.conn.ping()
+
+    def close_conn(self):
+        self.conn.close()
+
+    def get_client(self):
+        return self.conn
+
+
+# Kafka Extension
+class KafkaClient:
+    def __init__(self):
+        self.app = None
+        self.producer = None
+
+    def init_kafka(self, app, kafka_configs):
+        self.app = app
+        self.producer = confluent_kafka.Producer(kafka_configs)
+
+    def _decompose_msg(self, msg):
+        return {
+            "topic": msg.topic(),
+            "timestamp": msg.timestamp(),
+            "partition": msg.partition(),
+            "offset": msg.offset(),
+        }
+
+    def _produce_with_callback(self, topic, value, key, callback=None):
+        def ack(err, msg):
+            if err is not None:
+                print('Message delivery failed: {}'.format(err))
+            else:
+                print('Message delivered to {} [{}]'.format(msg.topic(), msg.partition()))
+            if callback:
+                callback(err, msg)
+        try:
+            self.producer.produce(topic=topic, value=value, key=key, on_delivery=ack)
+            self.producer.flush()
+        except KafkaException as e:
+            raise KafkaException(f"Error while producing message: {str(e)}")
+
+    def produce_message(self, topic, message_dict, task_id):
+        try:
+            message_dict["msg_key"] = str(uuid.uuid4())
+            message = json.dumps(message_dict)
+
+            # Synchronously send the message to Kafka
+            self._produce_with_callback(topic, message, task_id)
+        except Exception as e:
+            return None
+
+    def close(self):
+        self.producer.flush()
+
+
 # List of extensions
 db = SQLAlchemy(
     metadata=MetaData(
@@ -278,4 +349,6 @@ cel = FlaskCelery("director")
 cel_workflows = CeleryWorkflow()
 sentry = DirectorSentry()
 
-redis_client = redis.from_url("redis://127.0.0.1:6379", db="2", decode_responses=True)
+redis_client = RedisClient()
+kafka_client = KafkaClient()
+http_session = requests.Session()
