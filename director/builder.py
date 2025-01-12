@@ -1,5 +1,5 @@
-from celery import chain, group
 from celery.utils import uuid
+from celery import chain, group
 
 from director.exceptions import WorkflowSyntaxError
 from director.extensions import cel, cel_workflows
@@ -45,7 +45,6 @@ class WorkflowBuilder(object):
         task_id = uuid()
 
         queue = self.custom_queues.get(task_name, self.queue)
-
         # We create the Celery task specifying its UID
         signature = cel.tasks.get(task_name).subtask(
             kwargs={"workflow_id": self.workflow_id,
@@ -84,47 +83,65 @@ class WorkflowBuilder(object):
         full_canvas = self.parse_recursive(tasks, None, None, conditions, priority, is_hook)
         return full_canvas
 
+    def get_task_type(self, task):
+        if type(task) is list:
+            return "chain"
+        if type(task) is dict:
+            (task_name, _), = task.items() 
+            if task_name == "GROUP":
+                return "group"
+        return "common"
+
     def parse_recursive(self, tasks, parent_type, parent, conditions, priority, is_hook):
-        previous = parent.phase.id if parent!=None else []
+        previous = []
+        if parent != None:
+            if isinstance(parent.phase, group): 
+                previous = [task.id for task in parent.phase.tasks]
+            else:
+                previous = parent.phase.id 
         canvas_phase = []
+
         for task in tasks:
-            # 如果不是 GROUP 任务
-            if type(task) is tuple or type(task) is str:
-                if len(canvas_phase) > 0 and parent_type!="group":
+            task_type = self.get_task_type(task)
+            # 如果是普通任务
+            if task_type == "common":
+                if len(canvas_phase) > 0 and parent_type != "group":
                     previous = canvas_phase[-1].previous
 
                 task_name, is_skipped = task, False
-                if type(task) is tuple:
-                    task_name = task[0]
-                    condition_key = task[1]
+                # 如果是有条件的
+                if type(task) is dict:
+                    (task_name, condition_key), = task.items() 
                     is_skipped = condition_key in conditions and not conditions[condition_key]
 
                 signature = self.new_task(task_name, previous, is_hook, is_skipped, priority)
                 canvas_phase.append(CanvasPhase(signature, signature.id))
-            # GROUP 或者 CHAIN 任务
-            elif type(task) is dict:
-                task_name = list(task)[0]
-                task_type = task[task_name]["type"]
-                if "type" not in task[task_name] \
-                    and (task[task_name]["type"] != "group" \
-                        or task[task_name]["type"] != "chain"):
-                    raise WorkflowSyntaxError()
-                
+            # 如果是 GROUP 任务
+            else:
+                group_task = task[list(task)[0]] if task_type == "group" else task
                 current = None
-                if len(canvas_phase) > 0 and parent_type!="group":
+                if len(canvas_phase) > 0 and parent_type != "group":
                     current = canvas_phase[-1]
                 else:
                     current = parent
-                canvas_phase.append(self.parse_recursive(task[task_name]["tasks"], task_type, current, conditions, priority, is_hook))   
-            else:
-                raise WorkflowSyntaxError()
+                canvas_phase.append(self.parse_recursive(group_task, task_type, current, conditions, priority, is_hook))
                         
         if parent_type == "chain":
             chain_previous = canvas_phase[-1].phase.id
+            if isinstance(canvas_phase[-1].phase, group): 
+                chain_previous = [task.id for task in canvas_phase[-1].phase.tasks]
             return CanvasPhase(chain([ca.phase for ca in canvas_phase]), chain_previous)
         elif parent_type == "group":
+            def flatten(lst):
+                for item in lst:
+                    if isinstance(item, list):
+                        yield from flatten(item)
+                    else:
+                        yield item
             group_previous = [ca.previous for ca in canvas_phase]
-            return CanvasPhase(group([ca.phase for ca in canvas_phase]), group_previous)
+            # group_previous 有可能是 [task1, [task2, task3]] 这种嵌套情况
+            flatten_previous = list(flatten(group_previous))
+            return CanvasPhase(group([ca.phase for ca in canvas_phase]), flatten_previous)
         else:
             return canvas_phase
 
