@@ -1,4 +1,5 @@
 import imp
+import sys
 import yaml
 import redis
 import sentry_sdk
@@ -17,66 +18,55 @@ from sentry_sdk.utils import capture_internal_exceptions
 from sentry_sdk.integrations import celery as sentry_celery
 from flask_json_schema import JsonSchema, JsonValidationError
 
-from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound
+from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound, WorkflowSyntaxError
+config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
+absolute_root_path = config_path.parent.resolve()
+sys.path.append(absolute_root_path)
+import config
 
 
 
-def _expand_task_structure(task_structure, group_counter=0, chain_counter=0, group_prefix='GROUP', chain_prefix='CHAIN'):
-    if isinstance(task_structure, list):
-        expanded_tasks = []
-        for task_in_list in task_structure:
-            # dict 说明是普通任务或 GROUP
-            if isinstance(task_in_list, dict):
-                for key, value in task_in_list.items():
-                    # 如果是 GROUP 任务, 递归
-                    if key == group_prefix:
-                        group_name = f"{group_prefix}_{group_counter}"
-                        group_counter += 1
-                        expanded_group = {
-                            group_name: {
-                                'type': 'group',
-                                'tasks': _expand_task_structure(value, group_counter, chain_counter)
-                            }
-                        }
-                        expanded_tasks.append(expanded_group)
-                    else: # 如果是普通任务直接添加, 例如 {"task_1": "condition_task_1"}
-                        # 转化为 tuple 方便条件判断 ("task_1", "condition_task_1")
-                        (task_name, condtion_name), = task_in_list.items()
-                        expanded_tasks.append((task_name, condtion_name))
-            # 如果是 list 说明这是一个 chain, 对列表中每个任务递归
-            elif isinstance(task_in_list, list):
-                chain_name = f"{chain_prefix}_{chain_counter}"
-                chain_counter += 1
-                expanded_chain = {
-                            chain_name: {
-                                'type': 'chain',
-                                'tasks': _expand_task_structure(task_in_list, group_counter, chain_counter)
-                            }
-                        }
-                expanded_tasks.append(expanded_chain)
-            # 如果是其他类型, 只能是字符串, 直接添加, 例如 "render"
+def validate_tasks(task_definition, tasks_config):
+    if isinstance(task_definition, dict) and "tasks" not in task_definition:
+        raise WorkflowNotFound("no tasks definitions in workflow yaml")
+
+    if not isinstance(task_definition, list):
+        task_definition = task_definition["tasks"]
+
+    for task in task_definition:
+        if isinstance(task, str) and task not in tasks_config:
+            raise WorkflowSyntaxError(f"task name '{task}' is not found in task config")
+        if isinstance(task, list):
+            validate_tasks(task, tasks_config)
+        else: # dict
+            (task_name, value), = task.items() 
+            if task_name == "GROUP":
+                validate_tasks(value, tasks_config)
             else:
-                expanded_tasks.append(task_in_list)
-        return expanded_tasks
-    return task_structure
+                if task_name not in tasks_config:
+                    raise WorkflowSyntaxError(f"task name '{task_name}' is not found in task config")
+
+                condition_key = tasks_config[task_name]["condition_key"]
+                c1 = isinstance(condition_key, str) and value != condition_key
+                c2 = isinstance(condition_key, set) and value not in condition_key
+                if c1 or c2:
+                    raise WorkflowSyntaxError(f"condition_key '{condition_key}' is not found in task config")
 
 
-def expand_yaml_task_structure(yaml_data):
-    expand_yaml = {}
-    for task_name, tasks in yaml_data.items():
-        # 例如 v2.0-20240919:image_to_model, 下一层即是 tasks
-        if isinstance(tasks, dict) and "tasks" in tasks:
-            tasks["tasks"] = _expand_task_structure(tasks["tasks"])
-            tasks["type"] = "chain"
-            expand_yaml[task_name] = tasks
-        # 例如 periodic, 下一层是 task 的 list
+def format_yaml(yaml_data):
+    tasks_config = config.TASKS_CONFIG
+    formatted_yaml = {}
+    for task_name, val in yaml_data.items():
+        # 如果是 periodic 下层是任务 list
+        if isinstance(val, list):
+            for task in val:
+                (sub_task_name, tasks), = task.items() 
+                validate_tasks(tasks, tasks_config)
+                formatted_yaml[f"{task_name}:{sub_task_name}"] = tasks
         else:
-            for task in tasks:
-                for key, val in task.items():
-                    val["tasks"] = _expand_task_structure(val["tasks"])
-                    val["type"] = "chain"
-                    expand_yaml[f"{task_name}:{key}"] = val
-    return expand_yaml
+            validate_tasks(val, tasks_config)
+            formatted_yaml[task_name] = val
+    return formatted_yaml
 
 
 class CeleryWorkflow:
@@ -88,7 +78,8 @@ class CeleryWorkflow:
         self.app = app
         self.path = Path(self.app.config["DIRECTOR_HOME"]).resolve() / "workflows.yml"
         with open(self.path) as f:
-            self.workflows = expand_yaml_task_structure(yaml.load(f, Loader=yaml.SafeLoader))
+            original_yaml = yaml.load(f, Loader=yaml.SafeLoader)
+            self.workflows = format_yaml(original_yaml)
         self.import_user_tasks()
         self.read_schemas()
 

@@ -71,7 +71,8 @@ class Config(object):
             "broker_transport_options": {
                 "master_name": "director",
                 'queue_order_strategy': 'priority', # 开启 priority 逻辑
-                "sep": ":",
+                # 不能加 sep 因为在开启 flower 后有 bug 没有解决
+                # "sep": ":",
             },
         }
 
