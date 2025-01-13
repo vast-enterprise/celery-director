@@ -256,11 +256,9 @@ class DirectorSentry:
 # Redis Extension
 class RedisClient:
     def __init__(self):
-        self.app = None
         self.conn = None
 
-    def init_redis(self, app):
-        self.app = app
+    def init_redis(self):
         self.conn = redis.from_url(os.getenv('REDIS_URL'), db=os.getenv('ALGO_REDIS_DB'), decode_responses=True)
 
     def ping(self):
@@ -276,11 +274,9 @@ class RedisClient:
 # Kafka Extension
 class KafkaClient:
     def __init__(self):
-        self.app = None
         self.producer = None
 
-    def init_kafka(self, app, kafka_configs):
-        self.app = app
+    def init_kafka(self, kafka_configs):
         self.producer = confluent_kafka.Producer(kafka_configs)
 
     def _decompose_msg(self, msg):
@@ -309,10 +305,9 @@ class KafkaClient:
         try:
             message_dict["msg_key"] = str(uuid.uuid4())
             message = json.dumps(message_dict)
-
-            # Synchronously send the message to Kafka
             self._produce_with_callback(topic, message, task_id)
         except Exception as e:
+            print(e)
             return None
 
     def close(self):
@@ -337,6 +332,4 @@ cel = FlaskCelery("director")
 cel_workflows = CeleryWorkflow()
 sentry = DirectorSentry()
 
-redis_client = RedisClient()
-kafka_client = KafkaClient()
 http_session = requests.Session()

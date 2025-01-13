@@ -1,5 +1,5 @@
 import importlib
-import os
+import os,sys
 import pkgutil
 from functools import partial
 from pathlib import Path
@@ -9,12 +9,15 @@ from flask import Flask, Blueprint, jsonify, request, render_template
 from werkzeug.exceptions import HTTPException
 
 from director.api import api_bp
-from director.extensions import cel, cel_workflows, db, schema, sentry, migrate, redis_client, kafka_client
+from director.extensions import cel, cel_workflows, db, schema, sentry, migrate
 from director.settings import Config, UserConfig
 from director.tasks.base import BaseTask
 from director.utils import build_celery_schedule
 from director.views import view_bp
 
+config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
+sys.path.append(f"{config_path.parent.resolve()}/")
+import config as config_file
 
 with open(Path(__file__).parent.resolve() / "VERSION", encoding="utf-8") as version:
     __version__ = version.readline().rstrip()
@@ -80,17 +83,6 @@ def create_app(
     cel.init_app(app)
     cel_workflows.init_app(app)
     sentry.init_app(app)
-    redis_client.init_redis(app)
-    kafka_client.init_kafka(app, {
-        'bootstrap.servers': config.get("KAFKA_HOST"),
-        'sasl.username':     config.get("KAFKA_USERNAME"),
-        'sasl.password':     config.get("KAFKA_PASSWORD"),
-        'acks':              'all',
-        'enable.idempotence': True,
-        "retries": 3,
-        'security.protocol': config.get("SECURITY_PROTOCOL"),
-        'sasl.mechanisms':   config.get("SASL_MECHANISM"),
-    })
 
     # Dict passed to the cleanup function
     retentions = {}
