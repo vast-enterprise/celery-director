@@ -20,8 +20,7 @@ from flask_json_schema import JsonSchema, JsonValidationError
 
 from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound, WorkflowSyntaxError
 config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
-absolute_root_path = config_path.parent.resolve()
-sys.path.append(absolute_root_path)
+sys.path.append(f"{config_path.parent.resolve()}/")
 import config
 
 

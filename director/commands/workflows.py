@@ -141,6 +141,10 @@ def run_workflow(ctx, fullname, payload, comment):
         raise PayloadSyntaxError("task_id is not found in payload")
     if "priority" not in payload["data"] or "norm_priority" not in payload["data"]:
         raise PayloadSyntaxError("priority is not found in payload")
+    if "conditions" not in payload:
+        raise PayloadSyntaxError("conditions(dict) is not found in payload")
+    if "queues" not in payload:
+        raise PayloadSyntaxError("queues(dict) is not found in payload")
 
     task_id = payload["data"]["task_id"]
 
@@ -156,10 +160,11 @@ def run_workflow(ctx, fullname, payload, comment):
     _workflow = WorkflowBuilder(obj.id)
 
     # conditions 是一个字典, 里面决定某些子任务是否执行
-    # 如果没有 conditions 则所有子任务都执行
-    conditions = payload.get("conditions", {})
-    priority = payload["data"].get("priority", 9)
-    _workflow.run(priority, conditions)
+    # 如果是空字典  则所有子任务都执行
+    conditions = payload["conditions"]
+    queues = payload["queues"]
+    priority = payload["data"]["norm_priority"]
+    _workflow.run(queues, priority, conditions)
 
     click.echo(f"Workflow {obj.id} for task {task_id} launched")
 

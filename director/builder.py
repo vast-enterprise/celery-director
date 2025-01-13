@@ -57,17 +57,17 @@ class WorkflowBuilder(object):
 
     def new_task(self, task_name, previous, is_hook, is_skipped, priority, assigned_queue):
         task_id = uuid()
-
-        queue = self.custom_queues.get(task_name, self.queue)
-        if assigned_queue:
-            queue = assigned_queue
+        if not assigned_queue:
+            # 在 workflows.yml 找 queue, 如果没有则用默认 "celery"
+            # TODO 默认 task 的 queue 设置
+            assigned_queue = self.custom_queues.get(task_name, self.queue)
 
         # We create the Celery task specifying its UID
         signature = cel.tasks.get(task_name).subtask(
             kwargs={"workflow_id": self.workflow_id,
                     "payload": self.workflow.payload,
                     "is_skipped": is_skipped},
-            queue=queue,
+            queue=assigned_queue,
             task_id=task_id,
         )
         # 设置优先级
@@ -122,10 +122,12 @@ class WorkflowBuilder(object):
                 task_name, is_skipped = task, False
                 # 如果是有条件的
                 if type(task) is dict:
-                    (task_name, condition_key), = task.items() 
+                    (task_name, condition_key), = task.items()
                     is_skipped = condition_key in conditions and not conditions[condition_key]
 
-                signature = self.new_task(task_name, previous, is_hook, is_skipped, priority)
+                # 如果 queues 非空则用 payload 中的 queues
+                assigned_queue = queues.get(task_name, None)
+                signature = self.new_task(task_name, previous, is_hook, is_skipped, priority, assigned_queue)
                 canvas_phase.append(CanvasPhase(signature, signature.id))
             # 如果是 GROUP 任务
             else:
@@ -135,7 +137,7 @@ class WorkflowBuilder(object):
                     current = canvas_phase[-1]
                 else:
                     current = parent
-                canvas_phase.append(self.parse_recursive(group_task, task_type, current, conditions, priority, is_hook))
+                canvas_phase.append(self.parse_recursive(group_task, task_type, current, queues, conditions, priority, is_hook))
                         
         if parent_type == "chain":
             chain_previous = canvas_phase[-1].phase.id
@@ -195,7 +197,7 @@ class WorkflowBuilder(object):
 
 
     # priority 最低是 0, 最高是 9
-    def run(self, queues, priority = 9, conditions = {}):
+    def run(self, queues, priority, conditions):
         if not self.canvas:
             # 为每个 task 单独设置 priority
             self.build(queues, conditions, priority)
