@@ -55,7 +55,7 @@ class WorkflowBuilder(object):
         return "common"
 
 
-    def new_task(self, task_name, previous, is_hook, is_skipped, priority, assigned_queue):
+    def new_task(self, task_name, previous, is_hook, priority, assigned_queue):
         task_id = uuid()
         if not assigned_queue:
             # 在 workflows.yml 找 queue, 如果没有则用默认 "celery"
@@ -65,8 +65,7 @@ class WorkflowBuilder(object):
         # We create the Celery task specifying its UID
         signature = cel.tasks.get(task_name).subtask(
             kwargs={"workflow_id": self.workflow_id,
-                    "payload": self.workflow.payload,
-                    "is_skipped": is_skipped},
+                    "payload": self.workflow.payload},
             queue=assigned_queue_with_priority,
             task_id=task_id,
         )
@@ -127,7 +126,7 @@ class WorkflowBuilder(object):
                 if not is_skipped:
                     # 如果 queues 非空则用 payload 中的 queues
                     assigned_queue = queues.get(task_name, None)
-                    signature = self.new_task(task_name, previous, is_hook, is_skipped, priority, assigned_queue)
+                    signature = self.new_task(task_name, previous, is_hook, priority, assigned_queue)
                     canvas_phase.append(CanvasPhase(signature, signature.id))
             # 如果是 GROUP 任务
             else:
@@ -137,8 +136,13 @@ class WorkflowBuilder(object):
                     current = canvas_phase[-1]
                 else:
                     current = parent
-                canvas_phase.append(self.parse_recursive(group_task, task_type, current, queues, conditions, priority, is_hook))
-                        
+                group_canvas_phase = self.parse_recursive(group_task, task_type, current, queues, conditions, priority, is_hook)
+                if group_canvas_phase:
+                    canvas_phase.append(group_canvas_phase)
+
+        if len(canvas_phase) == 0:
+            return None
+
         if parent_type == "chain":
             chain_previous = canvas_phase[-1].phase.id
             if isinstance(canvas_phase[-1].phase, group): 

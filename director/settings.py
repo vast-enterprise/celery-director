@@ -71,6 +71,7 @@ class Config(object):
             "broker_transport_options": {
                 "master_name": "director",
                 # TODO 暂时不用自带的优先级
+                # https://docs.celeryq.dev/projects/kombu/en/v5.2.3/reference/kombu.transport.redis.html#kombu.transport.redis.Transport.Channel.queue_order_strategy
                 # 'queue_order_strategy': 'priority', 
                 # 不能加 sep 因为在开启 flower 后有 bug 没有解决
                 # "sep": ":",
