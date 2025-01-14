@@ -93,6 +93,18 @@ class CeleryWorkflow:
     def get_tasks(self, name):
         return self.get_by_name(name)["tasks"]
 
+    def get_first_task(self, task):
+        if isinstance(task, str):
+            return task
+        elif isinstance(task, list):
+            return self.get_first_task(task[0])
+        else:
+            (task_name, val), = task.items()
+            if task_name == "GROUP":
+                return self.get_first_task(val[0])
+            else:
+                return task_name
+
     def get_type(self, name):
         try:
             return self.get_by_name(name)["type"]
@@ -259,7 +271,7 @@ class RedisClient:
         self.conn = None
 
     def init_redis(self):
-        self.conn = redis.from_url(os.getenv('REDIS_URL'), db=os.getenv('ALGO_REDIS_DB'), decode_responses=True)
+        self.conn = redis.from_url(os.getenv('REDIS_URL'), db=os.getenv('DIRECTOR_BROKER_REDIS_DB'), decode_responses=True)
 
     def ping(self):
         return self.conn.ping()
@@ -328,7 +340,7 @@ db = SQLAlchemy(
 )
 migrate = Migrate()
 schema = JsonSchema()
-cel = FlaskCelery("director")
+cel = FlaskCelery("director", broker_connection_retry_on_startup=True)
 cel_workflows = CeleryWorkflow()
 sentry = DirectorSentry()
 

@@ -61,17 +61,17 @@ class WorkflowBuilder(object):
             # 在 workflows.yml 找 queue, 如果没有则用默认 "celery"
             # TODO 默认 task 的 queue 设置
             assigned_queue = self.custom_queues.get(task_name, self.queue)
-
+        assigned_queue_with_priority = f"{assigned_queue}_with_{priority}"
         # We create the Celery task specifying its UID
         signature = cel.tasks.get(task_name).subtask(
             kwargs={"workflow_id": self.workflow_id,
                     "payload": self.workflow.payload,
                     "is_skipped": is_skipped},
-            queue=assigned_queue,
+            queue=assigned_queue_with_priority,
             task_id=task_id,
         )
-        # 设置优先级
-        signature.set(priority=priority)
+        # TODO 设置优先级暂时不用 priority
+        # signature.set(priority=priority)
         
         if type(previous) != list:
             previous = [previous]

@@ -1,4 +1,4 @@
-import os
+import os, sys
 from pathlib import Path
 
 from environs import Env
@@ -70,7 +70,8 @@ class Config(object):
             ),
             "broker_transport_options": {
                 "master_name": "director",
-                'queue_order_strategy': 'priority', # 开启 priority 逻辑
+                # TODO 暂时不用自带的优先级
+                # 'queue_order_strategy': 'priority', 
                 # 不能加 sep 因为在开启 flower 后有 bug 没有解决
                 # "sep": ":",
             },

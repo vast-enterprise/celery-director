@@ -1,5 +1,5 @@
 import importlib
-import os,sys
+import os
 import pkgutil
 from functools import partial
 from pathlib import Path
@@ -15,9 +15,6 @@ from director.tasks.base import BaseTask
 from director.utils import build_celery_schedule
 from director.views import view_bp
 
-config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
-sys.path.append(f"{config_path.parent.resolve()}/")
-import config as config_file
 
 with open(Path(__file__).parent.resolve() / "VERSION", encoding="utf-8") as version:
     __version__ = version.readline().rstrip()

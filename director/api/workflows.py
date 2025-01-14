@@ -33,8 +33,7 @@ def _execute_workflow(model_version, task_name, payload={}, comment=None):
         abort(404, f"Workflow {fullname} not found")
 
     task_id = payload["data"]["task_id"]
-    # norm_priority 的范围是 0 - 9
-    norm_priority = payload["data"]["norm_priority"]
+    priority = payload["data"]["priority"]
 
     # Create the workflow in DB
     obj = Workflow(tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
@@ -45,7 +44,7 @@ def _execute_workflow(model_version, task_name, payload={}, comment=None):
     workflow = WorkflowBuilder(obj.id)
     conditions = payload["conditions"]
     queues = payload["queues"]
-    workflow.run(queues, norm_priority, conditions)
+    workflow.run(queues, priority, conditions)
 
     app.logger.info(f"Workflow sent : {workflow.canvas}")
     return obj.to_dict(), workflow
@@ -82,8 +81,8 @@ def create_workflow():
     )
     if "task_id" not in payload["data"]:
         return jsonify("no task_id in payload"), 400
-    if "priority" not in payload["data"] or "norm_priority" not in payload["data"] :
-        return jsonify("no priority or norm_priority in payload"), 400
+    if "priority" not in payload["data"]:
+        return jsonify("no priority in payload"), 400
 
     data, _ = _execute_workflow(project, name, payload, comment)
     return jsonify(data), 201
