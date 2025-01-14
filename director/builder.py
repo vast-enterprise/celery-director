@@ -124,11 +124,11 @@ class WorkflowBuilder(object):
                 if type(task) is dict:
                     (task_name, condition_key), = task.items()
                     is_skipped = condition_key in conditions and not conditions[condition_key]
-
-                # 如果 queues 非空则用 payload 中的 queues
-                assigned_queue = queues.get(task_name, None)
-                signature = self.new_task(task_name, previous, is_hook, is_skipped, priority, assigned_queue)
-                canvas_phase.append(CanvasPhase(signature, signature.id))
+                if not is_skipped:
+                    # 如果 queues 非空则用 payload 中的 queues
+                    assigned_queue = queues.get(task_name, None)
+                    signature = self.new_task(task_name, previous, is_hook, is_skipped, priority, assigned_queue)
+                    canvas_phase.append(CanvasPhase(signature, signature.id))
             # 如果是 GROUP 任务
             else:
                 group_task = task[list(task)[0]] if task_type == "group" else task
