@@ -1,7 +1,10 @@
 import os, sys
 from pathlib import Path
-
 from environs import Env
+
+config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
+sys.path.append(f"{config_path.parent.resolve()}/")
+import config
 
 
 HIDDEN_CONFIG = [
@@ -70,11 +73,11 @@ class Config(object):
             ),
             "broker_transport_options": {
                 "master_name": "director",
-                # TODO 暂时不用自带的优先级
-                # https://docs.celeryq.dev/projects/kombu/en/v5.2.3/reference/kombu.transport.redis.html#kombu.transport.redis.Transport.Channel.queue_order_strategy
-                # 'queue_order_strategy': 'priority', 
-                # 不能加 sep 因为在开启 flower 后有 bug 没有解决
+                # 不能加 sep 因为在 flower 里面是 sep 是写死了的
                 # "sep": ":",
+                # https://docs.celeryq.dev/projects/kombu/en/v5.2.3/reference/kombu.transport.redis.html#kombu.transport.redis.Transport.Channel.queue_order_strategy
+                "queue_order_strategy": "priority", 
+                "priority_steps": config.PRIORITY_LIST
             },
         }
 

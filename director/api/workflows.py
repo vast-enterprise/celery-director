@@ -33,8 +33,7 @@ def _execute_workflow(model_version, task_name, payload={}, comment=None):
         abort(404, f"Workflow {fullname} not found")
 
     task_id = payload["data"]["task_id"]
-    priority = payload["data"]["priority"]
-
+    mapped_priority = payload["mapped_priority"]
     # Create the workflow in DB
     obj = Workflow(tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
     obj.save()
@@ -44,7 +43,7 @@ def _execute_workflow(model_version, task_name, payload={}, comment=None):
     workflow = WorkflowBuilder(obj.id)
     conditions = payload["conditions"]
     queues = payload["queues"]
-    workflow.run(queues, priority, conditions)
+    workflow.run(queues, mapped_priority, conditions)
 
     app.logger.info(f"Workflow sent : {workflow.canvas}")
     return obj.to_dict(), workflow

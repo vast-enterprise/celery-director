@@ -61,16 +61,15 @@ class WorkflowBuilder(object):
             # 在 workflows.yml 找 queue, 如果没有则用默认 "celery"
             # TODO 默认 task 的 queue 设置
             assigned_queue = self.custom_queues.get(task_name, self.queue)
-        assigned_queue_with_priority = f"{assigned_queue}_with_{priority}"
+
         # We create the Celery task specifying its UID
         signature = cel.tasks.get(task_name).subtask(
             kwargs={"workflow_id": self.workflow_id,
                     "payload": self.workflow.payload},
-            queue=assigned_queue_with_priority,
+            queue=assigned_queue,
             task_id=task_id,
         )
-        # TODO 设置优先级暂时不用 priority
-        # signature.set(priority=priority)
+        signature.set(priority=priority)
         
         if type(previous) != list:
             previous = [previous]
@@ -167,10 +166,10 @@ class WorkflowBuilder(object):
         self.parse_queues()
         self.canvas_phase = self.parse_wf(self.tasks, queues, conditions, priority)
         self.canvas_phase.insert(0, CanvasPhase(
-            start.si(self.workflow.id).set(queue=self.queue),
+            start.si(self.workflow.id).set(queue=self.queue).set(priority=priority),
         []))
         self.canvas_phase.append(CanvasPhase(
-            end.si(self.workflow.id).set(queue=self.queue),
+            end.si(self.workflow.id).set(queue=self.queue).set(priority=priority),
         []))
 
         if self.root_type == "group":
