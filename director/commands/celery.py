@@ -47,6 +47,10 @@ def worker(dev_mode, worker_args):
             "--loglevel",
             "INFO",
         ]
+    # TODO 传递相应参数
+    from director._auto import cel
+    cel.conf.worker_platform = "3090"
+
     args += list(worker_args)
     os.execvp(args[0], args)
 
