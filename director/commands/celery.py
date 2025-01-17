@@ -33,7 +33,6 @@ def beat(dev_mode, beat_args):
 
 @celery.command("worker", context_settings=dict(ignore_unknown_options=True))
 @click.option("--dev", "dev_mode", default=False, is_flag=True, type=bool)
-@click.option("--platform", "platform", default="3090", type=str)
 @click.argument("worker_args", nargs=-1, type=click.UNPROCESSED)
 def worker(dev_mode, platform, worker_args):
     """Start a Celery worker instance"""
@@ -48,9 +47,6 @@ def worker(dev_mode, platform, worker_args):
             "--loglevel",
             "INFO",
         ]
-    # TODO 传递相应参数
-    from director._auto import cel
-    cel.conf.worker_platform = platform
 
     args += list(worker_args)
     os.execvp(args[0], args)

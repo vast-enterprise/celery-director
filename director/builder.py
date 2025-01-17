@@ -199,7 +199,6 @@ class WorkflowBuilder(object):
         self.previous = initial_previous
 
 
-    # priority 最低是 0, 最高是 9
     def run(self, queues, priority, conditions):
         if not self.canvas:
             # 为每个 task 单独设置 priority
