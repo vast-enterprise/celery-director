@@ -165,11 +165,15 @@ class WorkflowBuilder(object):
     def build(self, queues, conditions, priority):
         self.parse_queues()
         self.canvas_phase = self.parse_wf(self.tasks, queues, conditions, priority)
+        # TODO 起始和结束任务会向 DB 写任务状态信息, 可以单开一个worker
+        # 目前是随便选一个开的 worker 执行
+        if len(queues) > 0:
+            (_, task_assigned_queue) = next(iter(queues.items()))
         self.canvas_phase.insert(0, CanvasPhase(
-            start.si(self.workflow.id).set(queue=self.queue).set(priority=priority),
+            start.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority),
         []))
         self.canvas_phase.append(CanvasPhase(
-            end.si(self.workflow.id).set(queue=self.queue).set(priority=priority),
+            end.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority),
         []))
 
         if self.root_type == "group":
