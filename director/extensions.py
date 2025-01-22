@@ -345,3 +345,5 @@ cel_workflows = CeleryWorkflow()
 sentry = DirectorSentry()
 
 http_session = requests.Session()
+redis_client = RedisClient()
+kafka_client = KafkaClient()
