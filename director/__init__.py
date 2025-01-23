@@ -8,6 +8,12 @@ from celery.schedules import crontab
 from flask import Flask, Blueprint, jsonify, request, render_template
 from werkzeug.exceptions import HTTPException
 
+# if os.getenv("IS_WORKER") and os.getenv("IS_WORKER").lower() == "true":
+#     os.environ["FORKED_BY_MULTIPROCESSING"] = "1"
+#     if os.name != "nt":
+#         from billiard import context
+#         context._force_start_method("spawn")
+
 from director.api import api_bp
 from director.extensions import cel, cel_workflows, db, schema, sentry, migrate
 from director.settings import Config, UserConfig

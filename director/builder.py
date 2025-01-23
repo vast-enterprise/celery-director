@@ -9,7 +9,6 @@ from director.models.workflows import Workflow
 from director.tasks.workflows import start, end, failure_hooks_launcher
 
 
-
 class CanvasPhase:
     def __init__(self, phase, previous) -> None:
         self.phase = phase
@@ -169,6 +168,7 @@ class WorkflowBuilder(object):
         # 目前是随便选一个开的 worker 执行
         if len(queues) > 0:
             (_, task_assigned_queue) = next(iter(queues.items()))
+            print(f"start 和 end 任务分配到了 {task_assigned_queue}")
         self.canvas_phase.insert(0, CanvasPhase(
             start.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority),
         []))

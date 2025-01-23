@@ -31,15 +31,15 @@ def ping():
     """Simple task that just returns 'pong'."""
     return "pong"
 
-
-@cel.task()
-def start(workflow_id, *args, **kwargs):
+@cel.task(bind=True)
+def start(self, workflow_id, *args, **kwargs):
+    print("原来的 start")
     logger.info(f"Opening the workflow {workflow_id}")
     workflow = Workflow.query.filter_by(id=workflow_id).first()
-
     workflow.status = StatusType.progress
     workflow.save()
 
+    self.start_time = time.time()
     # 发 workflow 启动信息到 openapi
     data = workflow.payload["data"]
     task_id = data["task_id"]
@@ -64,6 +64,7 @@ def start(workflow_id, *args, **kwargs):
 
 @cel.task(bind=True)
 def end(self, workflow_id, *args, **kwargs):
+    print("原来的 end")
     # Waiting for the workflow status to be marked in error if a task failed
     # TODO 0.5 是不是太长
     time.sleep(0.5)
@@ -75,8 +76,9 @@ def end(self, workflow_id, *args, **kwargs):
         workflow.status = StatusType.success
         workflow.save()
 
+    end_time = workflow.created_at.timestamp()
     # 方法参考 https://github.com/celery/celery/issues/479
-    running_time = time.time() - self.start_time
+    running_time = time.time() - end_time
     increase_counter(extensions.redis_client, running_time, workflow.payload["data"])
 
 
