@@ -11,7 +11,7 @@ from director.extensions import kafka_client
 from director.models import StatusType
 from director.models.workflows import Workflow
 from director.models.tasks import Task
-from workers.utils.status_code import StatusCode
+from workers.worker_utils.status_code import StatusCode
 
 config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
 sys.path.append(f"{config_path.parent.resolve()}/")
@@ -33,7 +33,6 @@ def ping():
 
 @cel.task(bind=True)
 def start(self, workflow_id, *args, **kwargs):
-    print("原来的 start")
     logger.info(f"Opening the workflow {workflow_id}")
     workflow = Workflow.query.filter_by(id=workflow_id).first()
     workflow.status = StatusType.progress
@@ -64,7 +63,6 @@ def start(self, workflow_id, *args, **kwargs):
 
 @cel.task(bind=True)
 def end(self, workflow_id, *args, **kwargs):
-    print("原来的 end")
     # Waiting for the workflow status to be marked in error if a task failed
     # TODO 0.5 是不是太长
     time.sleep(0.5)
@@ -79,7 +77,7 @@ def end(self, workflow_id, *args, **kwargs):
     end_time = workflow.created_at.timestamp()
     # 方法参考 https://github.com/celery/celery/issues/479
     running_time = time.time() - end_time
-    increase_counter(extensions.redis_client, running_time, workflow.payload["data"])
+    increase_counter(extensions.redis_client.get_client(), running_time, workflow.payload["data"])
 
 
 @cel.task()
