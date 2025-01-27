@@ -18,6 +18,10 @@ from sentry_sdk.utils import capture_internal_exceptions
 from sentry_sdk.integrations import celery as sentry_celery
 from flask_json_schema import JsonSchema, JsonValidationError
 
+from redis.retry import Retry as RetrySync
+from redis.backoff import ExponentialBackoff
+from redis.exceptions import ConnectionError, TimeoutError, BusyLoadingError
+
 from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound, WorkflowSyntaxError
 config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
 sys.path.append(f"{config_path.parent.resolve()}/")
@@ -271,7 +275,14 @@ class RedisClient:
         self.conn = None
 
     def init_redis(self):
-        self.conn = redis.from_url(os.getenv('REDIS_URL'), db=os.getenv('DIRECTOR_BROKER_REDIS_DB'), decode_responses=True)
+        retry_sync = RetrySync(ExponentialBackoff(), retries=5)
+        self.conn = redis.from_url(os.getenv('REDIS_URL'),
+                                    password=os.getenv("REDIS_PASSWD"),
+                                    retry=retry_sync,
+                                    retry_on_error=[ConnectionError, BusyLoadingError, TimeoutError],
+                                    db=os.getenv('DIRECTOR_BROKER_REDIS_DB'),
+                                    decode_responses=True
+                                )
 
     def ping(self):
         return self.conn.ping()
