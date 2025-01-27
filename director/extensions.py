@@ -25,8 +25,6 @@ from redis.exceptions import ConnectionError, TimeoutError, BusyLoadingError
 from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound, WorkflowSyntaxError
 config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
 sys.path.append(f"{config_path.parent.resolve()}/")
-import config
-
 
 
 def validate_tasks(task_definition, tasks_config):
@@ -40,32 +38,33 @@ def validate_tasks(task_definition, tasks_config):
         if isinstance(task, str):
             # 无条件的任务
             if task not in tasks_config:
-                raise WorkflowSyntaxError(f"task '{task}' is not found in {config.TASKS_CONFIG_PATH}")
+                raise WorkflowSyntaxError(f"task '{task}' is not found")
         elif isinstance(task, list):
             validate_tasks(task, tasks_config)
         else: # dict
-            (task_name, value), = task.items() 
+            (task_name, value), = task.items()
             if task_name == "GROUP":
                 validate_tasks(value, tasks_config)
             else: # 有条件的任务
                 if task_name not in tasks_config:
-                    raise WorkflowSyntaxError(f"task '{task_name}' is not found in {config.TASKS_CONFIG_PATH}")
+                    raise WorkflowSyntaxError(f"task '{task_name}' is not found")
 
                 condition_key = tasks_config[task_name]["condition_key"]
                 c1 = isinstance(condition_key, str) and value != condition_key
                 c2 = isinstance(condition_key, set) and value not in condition_key
                 if c1 or c2:
-                    raise WorkflowSyntaxError(f"condition_key '{condition_key}' is not found in {config.TASKS_CONFIG_PATH}")
+                    raise WorkflowSyntaxError(f"condition_key '{condition_key}' is not found")
 
 
 def format_yaml(yaml_data):
+    # TODO：这里应该把config依赖去掉，从tripo_workflows文件夹下找到这个文件
     tasks_config = config.TASKS_CONFIG
     formatted_yaml = {}
     for task_name, val in yaml_data.items():
         # 如果是 periodic 下层是任务 list
         if isinstance(val, list):
             for task in val:
-                (sub_task_name, tasks), = task.items() 
+                (sub_task_name, tasks), = task.items()
                 validate_tasks(tasks, tasks_config)
                 formatted_yaml[f"{task_name}:{sub_task_name}"] = tasks
         else:
