@@ -212,6 +212,7 @@ def relaunch_workflow(ctx, id):
     # Build the workflow and execute it
     workflow = WorkflowBuilder(obj.id)
     conditions = obj.payload["conditions"]
+    # TODO 参数数量不对
     workflow.run(conditions)
 
     click.echo(f"Workflow {obj.id} relaunched")

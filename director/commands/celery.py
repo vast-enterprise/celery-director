@@ -34,7 +34,7 @@ def beat(dev_mode, beat_args):
 @celery.command("worker", context_settings=dict(ignore_unknown_options=True))
 @click.option("--dev", "dev_mode", default=False, is_flag=True, type=bool)
 @click.argument("worker_args", nargs=-1, type=click.UNPROCESSED)
-def worker(dev_mode, platform, worker_args):
+def worker(dev_mode, worker_args):
     """Start a Celery worker instance"""
     args = [
         "celery",

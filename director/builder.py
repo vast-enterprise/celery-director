@@ -54,12 +54,21 @@ class WorkflowBuilder(object):
         return "common"
 
 
-    def new_task(self, task_name, previous, is_hook, priority, assigned_queue):
+    def new_task(self, task_name, previous, is_hook, priority, assigned_queue, periodic):
         task_id = uuid()
-        if not assigned_queue:
-            # 在 workflows.yml 找 queue, 如果没有则用默认 "celery"
-            # TODO 默认 task 的 queue 设置
-            assigned_queue = self.custom_queues.get(task_name, self.queue)
+        if periodic:
+            signature = cel.tasks.get(task_name).subtask(
+                task_id=task_id,
+                queue=cel.app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"]
+            )
+            task = Task(
+                id=task_id,
+                key=task_name,
+                workflow_id=self.workflow.id,
+                status=StatusType.pending,
+            )
+            task.save()
+            return signature
 
         # We create the Celery task specifying its UID
         signature = cel.tasks.get(task_name).subtask(
@@ -95,12 +104,12 @@ class WorkflowBuilder(object):
             raise WorkflowSyntaxError()
 
 
-    def parse_wf(self, tasks, queues, conditions, priority, is_hook=False):
-        full_canvas = self.parse_recursive(tasks, None, None, queues, conditions, priority, is_hook)
+    def parse_wf(self, tasks, queues, conditions, priority, periodic, is_hook=False):
+        full_canvas = self.parse_recursive(tasks, None, None, queues, conditions, priority, is_hook, periodic)
         return full_canvas
 
 
-    def parse_recursive(self, tasks, parent_type, parent, queues, conditions, priority, is_hook):
+    def parse_recursive(self, tasks, parent_type, parent, queues, conditions, priority, is_hook, periodic):
         previous = []
         if parent != None:
             if isinstance(parent.phase, group): 
@@ -123,8 +132,13 @@ class WorkflowBuilder(object):
                     is_skipped = condition_key in conditions and not conditions[condition_key]
                 if not is_skipped:
                     # 如果 queues 非空则用 payload 中的 queues
-                    assigned_queue = queues.get(task_name, None)
-                    signature = self.new_task(task_name, previous, is_hook, priority, assigned_queue)
+                    assigned_queue = None
+                    if not periodic:
+                        try:
+                            assigned_queue = queues[task_name]
+                        except Exception as e:
+                            raise WorkflowSyntaxError("Every task should have an assigned queue")
+                    signature = self.new_task(task_name, previous, is_hook, priority, assigned_queue, periodic)
                     canvas_phase.append(CanvasPhase(signature, signature.id))
             # 如果是 GROUP 任务
             else:
@@ -161,20 +175,19 @@ class WorkflowBuilder(object):
             return canvas_phase
 
 
-    def build(self, queues, conditions, priority):
+    def build(self, queues, conditions, priority, periodic):
+        # 不在 workflows.yml 里面定义 queue 名称
+        # 所有 queue 名称都由 queues 传入
         self.parse_queues()
-        self.canvas_phase = self.parse_wf(self.tasks, queues, conditions, priority)
-        # TODO 起始和结束任务会向 DB 写任务状态信息, 可以单开一个worker
-        # 目前是随便选一个开的 worker 执行
-        if len(queues) > 0:
-            (_, task_assigned_queue) = next(iter(queues.items()))
-            print(f"start 和 end 任务分配到了 {task_assigned_queue}")
-        self.canvas_phase.insert(0, CanvasPhase(
-            start.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority),
-        []))
-        self.canvas_phase.append(CanvasPhase(
-            end.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority),
-        []))
+        self.canvas_phase = self.parse_wf(self.tasks, queues, conditions, priority, periodic)
+        if not periodic:
+            task_assigned_queue = cel.app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"]
+            self.canvas_phase.insert(0, CanvasPhase(
+                start.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority),
+            []))
+            self.canvas_phase.append(CanvasPhase(
+                end.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority),
+            []))
 
         if self.root_type == "group":
             self.canvas = group([ca.phase for ca in self.canvas_phase], task_id=uuid())
@@ -203,10 +216,12 @@ class WorkflowBuilder(object):
         self.previous = initial_previous
 
 
-    def run(self, queues, priority, conditions):
+    def run(self, queues, priority, conditions, periodic=False):
         if not self.canvas:
             # 为每个 task 单独设置 priority
-            self.build(queues, conditions, priority)
+            self.build(queues, conditions, priority, periodic)
+
+        # 不在 workflows.yml 里面设置任何 hook
         self.build_hooks()
 
         try:

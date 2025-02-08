@@ -18,7 +18,7 @@ def execute(workflow, payload):
 
     # Build the workflow and execute it
     workflow = WorkflowBuilder(c_obj.id)
-    workflow.run()
+    workflow.run(None, None, None, True)
 
     c_obj_dict = c_obj.to_dict()
 

@@ -100,7 +100,6 @@ def create_app(
             schedule_str, schedule_value = build_celery_schedule(
                 workflow, periodic_conf
             )
-
             cel.conf.beat_schedule.update(
                 {
                     f"periodic-{workflow}-{schedule_str}": {
@@ -110,6 +109,7 @@ def create_app(
                             workflow,
                             periodic_payload,
                         ),
+                        "options": {"queue": app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"]},
                     }
                 }
             )

@@ -90,6 +90,7 @@ class Config(object):
         # Enable Vue debug loading vue.js instead of vue.min.js
         self.VUE_DEBUG = env.bool("DIRECTOR_VUE_DEBUG", False)
 
+        self.NON_SUBMODULE_TASKS_QUEUE_NAME = config.NON_SUBMODULE_TASKS_QUEUE_NAME
 
 class UserConfig(dict):
     """Handle the user configuration"""
