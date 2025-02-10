@@ -1,4 +1,4 @@
-import json
+import json, uuid
 
 from sqlalchemy_utils import UUIDType
 from sqlalchemy.types import PickleType
@@ -8,15 +8,23 @@ from director.models import BaseModel, StatusType
 from director.models.utils import JSONBType
 
 
+def get_uuid():
+    return str(uuid.uuid4())
+
+
 class Task(BaseModel):
     __tablename__ = "celery_tasks"
 
+    id = db.Column(
+        UUIDType(binary=False), primary_key=True, nullable=False, default=get_uuid
+    )
     key = db.Column(db.String(255), nullable=False)
     status = db.Column(db.Enum(StatusType), default=StatusType.pending, nullable=False)
     previous = db.Column(JSONBType, default=[])
     result = db.Column(PickleType)
     is_hook = db.Column(db.Boolean, default=False)
-
+    data = db.Column(db.String(255), nullable=True)
+    
     # Relationship
     workflow_id = db.Column(
         UUIDType(binary=False),

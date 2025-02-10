@@ -1,3 +1,4 @@
+import json
 from celery import Task as _Task
 from celery.signals import after_task_publish, task_prerun, task_postrun
 from celery.utils.log import get_task_logger
@@ -46,6 +47,19 @@ class BaseTask(_Task):
         task = Task.query.filter_by(id=task_id).first()
         task.status = StatusType.success
         task.result = retval
+        
+        # TODO 有一些任务需要往数据库存东西
+        # 可以放在 data 里面
+        if self.name == "translate":
+            data = retval["translated_data"]["data"]
+            is_eng_negative_pmt = retval["translated_data"]["is_eng_negative_pmt"]
+            translate_data = {
+                "original_prompt": data["original_prompt"],
+                "obj_prompt": data["obj_prompt"],
+                "original_negative_prompt": data["original_negative_prompt"] if is_eng_negative_pmt else None,
+                "negative_prompt": data["negative_prompt"] if is_eng_negative_pmt else None
+            }
+            task.data = json.dumps(translate_data)
         task.save()
 
         logger.info(f"Task {task_id} is now in success")

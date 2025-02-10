@@ -35,7 +35,7 @@ def _execute_workflow(model_version, task_name, payload={}, comment=None):
     task_id = payload["data"]["task_id"]
     mapped_priority = payload["mapped_priority"]
     # Create the workflow in DB
-    obj = Workflow(tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
+    obj = Workflow(id=task_id, tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
     obj.save()
 
     # Build the workflow and execute it

@@ -1,11 +1,19 @@
+import uuid
+from sqlalchemy_utils import UUIDType
+
 from director.extensions import db
 from director.models import BaseModel, StatusType
 from director.models.utils import JSONBType
 
+def get_uuid():
+    return str(uuid.uuid4())
 
 class Workflow(BaseModel):
     __tablename__ = "celery_workflows"
 
+    id = db.Column(
+        UUIDType(binary=False), primary_key=True, nullable=False, default=get_uuid
+    )
     tripo_task_id = db.Column(db.String(255), nullable=False, index=True)
     task_name = db.Column(db.String(255), nullable=False)
     model_version = db.Column(db.String(255), nullable=False)

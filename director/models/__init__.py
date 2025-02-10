@@ -1,13 +1,6 @@
 import enum
-import uuid
-
-from sqlalchemy_utils import UUIDType
 
 from director.extensions import db
-
-
-def get_uuid():
-    return str(uuid.uuid4())
 
 
 class StatusType(enum.Enum):
@@ -21,9 +14,6 @@ class StatusType(enum.Enum):
 class BaseModel(db.Model):
     __abstract__ = True
 
-    id = db.Column(
-        UUIDType(binary=False), primary_key=True, nullable=False, default=get_uuid
-    )
     created_at = db.Column(
         db.DateTime(timezone=True), default=db.func.now(), nullable=False, index=True
     )
