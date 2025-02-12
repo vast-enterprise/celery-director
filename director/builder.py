@@ -72,7 +72,7 @@ class WorkflowBuilder(object):
 
         # We create the Celery task specifying its UID
         signature = cel.tasks.get(task_name).subtask(
-            kwargs={"workflow_id": self.workflow_id,
+            kwargs={"workflow_id": str(self.workflow_id),
                     "payload": self.workflow.payload},
             queue=assigned_queue,
             task_id=task_id,
@@ -243,7 +243,7 @@ class WorkflowBuilder(object):
         status_to_cancel = set([StatusType.pending, StatusType.progress])
         for task in self.workflow.tasks:
             if task.status in status_to_cancel:
-                cel.control.revoke(task.id, terminate=True)
+                cel.control.revoke(str(task.id), terminate=True)
                 task.status = StatusType.canceled
                 task.save()
         self.workflow.status = StatusType.canceled

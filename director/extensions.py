@@ -297,6 +297,7 @@ class RedisClient:
     def acquire_lock(self, lock_key, lock_value, timeout):
         # https://redis.io/docs/latest/develop/use/patterns/distributed-locks/
         res = self.conn.set(lock_key, lock_value, ex=timeout, nx=True)
+        print(f"锁被acquire了 {lock_key}: {lock_value}: {res}")
         return res
 
     def release_lock(self, lock_key, lock_value):
@@ -310,6 +311,7 @@ class RedisClient:
         # 只有锁的值与当前值相同才能释放锁，防止错误释放其他 pod 的锁
         release_lock_lua_script = self.conn.register_script(release_lock_lua)
         result = release_lock_lua_script(keys=[lock_key], args=[lock_value])
+        print(f"锁被release了 {lock_key}|{lock_value}|{result != 0}")
         return result != 0
 
 
@@ -405,15 +407,9 @@ class WorkerLogger:
         log_filename_format = "{location}.log"
         logging_file = os.path.join(logging_dir, log_filename_format.format(location=location))
 
-        real_logger = logging.getLogger(f"worker_{self.logger.module_name}_{self.logger.version}")
+        real_logger = logging.getLogger(f"worker_logger")
         real_logger.setLevel(level=logging.DEBUG)
-        formatter = logging.Formatter(f"""%(asctime)s - ip:{self.logger.location}
-                                    - env:{os.getenv("ENV")}
-                                    - module_name:{self.logger.module_name}
-                                    - version:{self.logger.version}
-                                    - task_id:%(task_id)s
-                                    - %(filename)s[line:%(lineno)d]
-                                    - %(levelname)s: %(message)s""")
+        formatter = logging.Formatter(f"""%(asctime)s - ip:{self.logger.location} - env:{os.getenv("ENV")} - module_name:{self.logger.module_name} - version:{self.logger.version} - task_id:%(task_id)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s""")
 
         time_rotating_file_handler = handlers.TimedRotatingFileHandler(logging_file, when='D')
         time_rotating_file_handler.setLevel(logging.DEBUG)
