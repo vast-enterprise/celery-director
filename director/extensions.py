@@ -1,4 +1,5 @@
 import imp
+import socket
 import sys
 import yaml
 import redis
@@ -355,6 +356,82 @@ class KafkaClient:
         self.producer.flush()
 
 
+class Logger(object):
+    def __init__(self):
+        self.logger = None
+        self.module_name = None
+        self.version = None
+        self.location = None
+
+        self.task_id = None
+
+import logging
+from logging import handlers
+
+# Worker Logger Extension
+class WorkerLogger:
+    def __init__(self):
+        self.logger = Logger()
+
+    @staticmethod
+    def get_extra(task_id=None):
+        extra = {
+                'task_id': task_id
+            }
+        return extra
+
+    @staticmethod
+    def extract_ip():
+        st = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            st.connect(("10.255.255.255", 1))
+            IP = st.getsockname()[0]
+        except Exception:
+            IP = "127.0.0.1"
+        finally:
+            st.close()
+        return IP
+
+    def init_logger(self, module_name, version, log_dir=None):
+        location = self.extract_ip()
+        self.logger.location = location
+        self.logger.module_name = module_name
+        self.logger.version = version
+
+        if log_dir is None:
+            log_dir = config.LOG_ROOT
+        logging_dir = os.path.join(log_dir, os.getenv("ENV"), module_name)
+        os.makedirs(logging_dir, exist_ok=True)
+        log_filename_format = "{location}.log"
+        logging_file = os.path.join(logging_dir, log_filename_format.format(location=location))
+
+        real_logger = logging.getLogger(f"worker_{self.logger.module_name}_{self.logger.version}")
+        real_logger.setLevel(level=logging.DEBUG)
+        formatter = logging.Formatter(f"""%(asctime)s - ip:{self.logger.location}
+                                    - env:{os.getenv("ENV")}
+                                    - module_name:{self.logger.module_name}
+                                    - version:{self.logger.version}
+                                    - task_id:%(task_id)s
+                                    - %(filename)s[line:%(lineno)d]
+                                    - %(levelname)s: %(message)s""")
+
+        time_rotating_file_handler = handlers.TimedRotatingFileHandler(logging_file, when='D')
+        time_rotating_file_handler.setLevel(logging.DEBUG)
+        time_rotating_file_handler.setFormatter(formatter)
+
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(logging.DEBUG)
+        stream_handler.setFormatter(formatter)
+
+        real_logger.addHandler(stream_handler)
+        real_logger.addHandler(time_rotating_file_handler)
+        real_logger.propagate = False
+        self.logger.logger = real_logger
+
+    def get_worker_logger(self):
+        return self.logger.logger
+
+
 # List of extensions
 db = SQLAlchemy(
     metadata=MetaData(
@@ -376,3 +453,4 @@ sentry = DirectorSentry()
 http_session = requests.Session()
 redis_client = RedisClient()
 kafka_client = KafkaClient()
+worker_logger = WorkerLogger()

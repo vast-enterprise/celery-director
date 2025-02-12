@@ -59,6 +59,7 @@ def start(self, workflow_id, *args, **kwargs):
     # TODO 从环境变量读取
     target_topic = config.TASK_TOPIC
     kafka_client.produce_message(target_topic, callback_data, task_id)
+    return {"prev_task_finish_time": time.time()}
 
 
 @cel.task(bind=True)
