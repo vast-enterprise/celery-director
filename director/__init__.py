@@ -4,6 +4,12 @@ import pkgutil
 from functools import partial
 from pathlib import Path
 
+# if os.getenv("IS_WORKER") and os.getenv("IS_WORKER").lower() == "true":
+#     os.environ["FORKED_BY_MULTIPROCESSING"] = "1"
+#     if os.name != "nt":
+#         from billiard import context
+#         context._force_start_method("spawn")
+
 from celery.schedules import crontab
 from flask import Flask, Blueprint, jsonify, request, render_template
 from werkzeug.exceptions import HTTPException
@@ -109,6 +115,7 @@ def create_app(
                             workflow,
                             periodic_payload,
                         ),
+                        # beat 会把 periodic 的任务推送到下边拿到 queue 里
                         "options": {"queue": app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"]},
                     }
                 }

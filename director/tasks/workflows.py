@@ -37,7 +37,7 @@ def start(self, workflow_id, *args, **kwargs):
     workflow = Workflow.query.filter_by(id=workflow_id).first()
     workflow.status = StatusType.progress
     workflow.save()
-
+    print("在 start 任务中设置 start_time")
     self.start_time = time.time()
     # 发 workflow 启动信息到 openapi
     data = workflow.payload["data"]
