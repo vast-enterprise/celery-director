@@ -6,12 +6,14 @@ from celery.utils import uuid
 from celery.utils.log import get_task_logger
 
 from director import extensions
+from director import create_app
 from director.extensions import cel
 from director.extensions import kafka_client
 from director.models import StatusType
 from director.models.workflows import Workflow
 from director.models.tasks import Task
 from workers.worker_utils.status_code import StatusCode
+from celery import current_app
 
 config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
 sys.path.append(f"{config_path.parent.resolve()}/")
@@ -37,8 +39,7 @@ def start(self, workflow_id, *args, **kwargs):
     workflow = Workflow.query.filter_by(id=workflow_id).first()
     workflow.status = StatusType.progress
     workflow.save()
-    print("在 start 任务中设置 start_time")
-    self.start_time = time.time()
+
     # 发 workflow 启动信息到 openapi
     data = workflow.payload["data"]
     task_id = data["task_id"]

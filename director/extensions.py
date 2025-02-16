@@ -19,6 +19,8 @@ from sentry_sdk.utils import capture_internal_exceptions
 from sentry_sdk.integrations import celery as sentry_celery
 from flask_json_schema import JsonSchema, JsonValidationError
 
+from celery.loaders.app import AppLoader
+
 from redis.retry import Retry as RetrySync
 from redis.backoff import ExponentialBackoff
 from redis.exceptions import ConnectionError, TimeoutError, BusyLoadingError
@@ -27,7 +29,7 @@ from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound
 config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
 sys.path.append(f"{config_path.parent.resolve()}/")
 import config
-
+from workers.worker_loader import SubmoduleWorkerLoader
 
 
 def validate_tasks(task_definition, tasks_config):
@@ -442,7 +444,7 @@ db = SQLAlchemy(
 )
 migrate = Migrate()
 schema = JsonSchema()
-cel = FlaskCelery("director", broker_connection_retry_on_startup=True)
+cel = FlaskCelery("director", broker_connection_retry_on_startup=True, loader=SubmoduleWorkerLoader)
 cel_workflows = CeleryWorkflow()
 sentry = DirectorSentry()
 

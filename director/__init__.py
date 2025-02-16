@@ -4,18 +4,18 @@ import pkgutil
 from functools import partial
 from pathlib import Path
 
-# if os.getenv("IS_WORKER") and os.getenv("IS_WORKER").lower() == "true":
-#     os.environ["FORKED_BY_MULTIPROCESSING"] = "1"
-#     if os.name != "nt":
-#         from billiard import context
-#         context._force_start_method("spawn")
+if os.getenv("IS_WORKER") and os.getenv("IS_WORKER").lower() == "true":
+    os.environ["FORKED_BY_MULTIPROCESSING"] = "1"
+    if os.name != "nt":
+        from billiard import context
+        context._force_start_method("spawn")
 
 from celery.schedules import crontab
 from flask import Flask, Blueprint, jsonify, request, render_template
 from werkzeug.exceptions import HTTPException
 
 from director.api import api_bp
-from director.extensions import cel, cel_workflows, db, schema, sentry, migrate
+from director.extensions import FlaskCelery, cel, cel_workflows, db, schema, sentry, migrate
 from director.settings import Config, UserConfig
 from director.tasks.base import BaseTask
 from director.utils import build_celery_schedule
@@ -48,7 +48,7 @@ class DirectorFlask(Flask):
 
 # Create the application using a factory
 def create_app(
-    home_path=os.getenv("DIRECTOR_HOME"), config_path=os.getenv("DIRECTOR_CONFIG")
+    home_path=os.getenv("DIRECTOR_HOME"), config_path=os.getenv("DIRECTOR_CONFIG"), celery_app: FlaskCelery = None
 ):
     app = DirectorFlask(__name__)
     c = Config(home_path, config_path)
@@ -83,7 +83,10 @@ def create_app(
         directory=str(Path(__file__).resolve().parent / "migrations"),
     )
     schema.init_app(app)
-    cel.init_app(app)
+    new_cel = cel
+    if celery_app is not None:
+        new_cel = celery_app
+    new_cel.init_app(app)
     cel_workflows.init_app(app)
     sentry.init_app(app)
 
@@ -106,7 +109,7 @@ def create_app(
             schedule_str, schedule_value = build_celery_schedule(
                 workflow, periodic_conf
             )
-            cel.conf.beat_schedule.update(
+            new_cel.conf.beat_schedule.update(
                 {
                     f"periodic-{workflow}-{schedule_str}": {
                         "task": "director.tasks.periodic.execute",
@@ -122,7 +125,7 @@ def create_app(
             )
 
     if len(retentions):
-        cel.conf.beat_schedule.update(
+        new_cel.conf.beat_schedule.update(
             {
                 "periodic-cleanup": {
                     "task": "director.tasks.periodic.cleanup",

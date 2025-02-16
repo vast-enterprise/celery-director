@@ -8,5 +8,3 @@ ctx = app.app_context()
 ctx.push()
 
 from director.extensions import cel
-# 确保 Celery 知道应用上下文
-cel.conf.update(app.config)
