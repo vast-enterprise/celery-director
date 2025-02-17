@@ -1,12 +1,11 @@
-import json, uuid
+import  uuid
 
 from sqlalchemy_utils import UUIDType
-from sqlalchemy.types import PickleType
 
 from director.extensions import db
 from director.exceptions import UserNotFound
-from director.models import BaseModel, StatusType
-from director.models.utils import JSONBType
+from director.models import BaseModel
+
 
 def get_uuid():
     return str(uuid.uuid4())

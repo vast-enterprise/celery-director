@@ -1,11 +1,10 @@
 import json
 from celery import Task as _Task
-from celery.signals import after_task_publish, task_prerun, task_postrun
+from celery.signals import task_prerun, task_postrun
 from celery.utils.log import get_task_logger
 
 from director.extensions import cel, db
 from director.models import StatusType
-from director.models.workflows import Workflow
 from director.models.tasks import Task
 
 

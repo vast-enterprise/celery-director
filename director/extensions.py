@@ -19,8 +19,6 @@ from sentry_sdk.utils import capture_internal_exceptions
 from sentry_sdk.integrations import celery as sentry_celery
 from flask_json_schema import JsonSchema, JsonValidationError
 
-from celery.loaders.app import AppLoader
-
 from redis.retry import Retry as RetrySync
 from redis.backoff import ExponentialBackoff
 from redis.exceptions import ConnectionError, TimeoutError, BusyLoadingError

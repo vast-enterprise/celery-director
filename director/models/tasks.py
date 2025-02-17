@@ -1,4 +1,4 @@
-import json, uuid
+import uuid
 
 from sqlalchemy_utils import UUIDType
 from sqlalchemy.types import PickleType

@@ -6,14 +6,13 @@ from celery.utils import uuid
 from celery.utils.log import get_task_logger
 
 from director import extensions
-from director import create_app
 from director.extensions import cel
 from director.extensions import kafka_client
 from director.models import StatusType
 from director.models.workflows import Workflow
 from director.models.tasks import Task
 from workers.worker_utils.status_code import StatusCode
-from celery import current_app
+
 
 config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
 sys.path.append(f"{config_path.parent.resolve()}/")
