@@ -1,8 +1,9 @@
 import imp
-import socket
 import sys
 import yaml
 import redis
+import socket
+import importlib
 import sentry_sdk
 import confluent_kafka
 from pathlib import Path
@@ -136,27 +137,40 @@ class CeleryWorkflow:
         except KeyError:
             return "celery"
 
+    # def import_user_tasks(self):
+    #     self.plugin_base = PluginBase(package="director.foobar")
+
+    #     folder = Path(self.app.config["DIRECTOR_HOME"]).resolve()
+    #     self.plugin_source = self.plugin_base.make_plugin_source(
+    #         searchpath=[str(folder)]
+    #     )
+
+    #     tasks = Path(folder / "tasks").glob("**/*.py")
+    #     with self.plugin_source:
+    #         for task in tasks:
+    #             if task.stem == "__init__":
+    #                 continue
+
+    #             name = str(task.relative_to(folder))[:-3].replace("/", ".")
+    #             __import__(
+    #                 self.plugin_source.base.package + "." + name,
+    #                 globals(),
+    #                 {},
+    #                 ["__name__"],
+    #             )
+
     def import_user_tasks(self):
-        self.plugin_base = PluginBase(package="director.foobar")
-
         folder = Path(self.app.config["DIRECTOR_HOME"]).resolve()
-        self.plugin_source = self.plugin_base.make_plugin_source(
-            searchpath=[str(folder)]
-        )
-
         tasks = Path(folder / "tasks").glob("**/*.py")
-        with self.plugin_source:
-            for task in tasks:
-                if task.stem == "__init__":
-                    continue
-
-                name = str(task.relative_to(folder))[:-3].replace("/", ".")
-                __import__(
-                    self.plugin_source.base.package + "." + name,
-                    globals(),
-                    {},
-                    ["__name__"],
-                )
+        for task in tasks:
+            if task.stem == "__init__":
+                continue
+            module_name = f"tasks.{task.stem}"
+            module_path = str(task)
+            spec = importlib.util.spec_from_file_location(module_name, module_path)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
 
     def read_schemas(self):
         folder = Path(self.app.config["DIRECTOR_HOME"]).resolve()

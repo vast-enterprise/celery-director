@@ -20,7 +20,7 @@ import config
 
 workflow_path = Path(os.getenv("DIRECTOR_HOME")).resolve()
 sys.path.append(f"{workflow_path.resolve()}/")
-from tripo_workflows.tasks.celery_task_utils import increase_counter
+from tripo_workflows.celery_task_utils import increase_counter
 
 
 logger = get_task_logger(__name__)
