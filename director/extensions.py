@@ -10,7 +10,6 @@ from pathlib import Path
 from celery import Celery
 import os, uuid, requests, json
 from flask_migrate import Migrate
-from pluginbase import PluginBase
 from sqlalchemy.schema import MetaData
 from flask_sqlalchemy import SQLAlchemy
 from json.decoder import JSONDecodeError
@@ -136,28 +135,6 @@ class CeleryWorkflow:
             return self.get_by_name(name)["queue"]
         except KeyError:
             return "celery"
-
-    # def import_user_tasks(self):
-    #     self.plugin_base = PluginBase(package="director.foobar")
-
-    #     folder = Path(self.app.config["DIRECTOR_HOME"]).resolve()
-    #     self.plugin_source = self.plugin_base.make_plugin_source(
-    #         searchpath=[str(folder)]
-    #     )
-
-    #     tasks = Path(folder / "tasks").glob("**/*.py")
-    #     with self.plugin_source:
-    #         for task in tasks:
-    #             if task.stem == "__init__":
-    #                 continue
-
-    #             name = str(task.relative_to(folder))[:-3].replace("/", ".")
-    #             __import__(
-    #                 self.plugin_source.base.package + "." + name,
-    #                 globals(),
-    #                 {},
-    #                 ["__name__"],
-    #             )
 
     def import_user_tasks(self):
         folder = Path(self.app.config["DIRECTOR_HOME"]).resolve()

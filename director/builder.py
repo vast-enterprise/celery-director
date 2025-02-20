@@ -1,3 +1,5 @@
+import sys, os
+from pathlib import Path
 from celery import chain, group
 from celery.utils import uuid
 
@@ -6,7 +8,11 @@ from director.extensions import cel, cel_workflows
 from director.models import StatusType
 from director.models.tasks import Task
 from director.models.workflows import Workflow
-from director.tasks.workflows import start, end, failure_hooks_launcher
+from director.tasks.workflows import failure_hooks_launcher
+
+workflow_path = Path(os.getenv("DIRECTOR_HOME")).resolve()
+sys.path.append(f"{workflow_path.resolve()}/")
+from tripo_workflows.tasks.start_end_tasks import start, end
 
 
 class CanvasPhase:
@@ -57,6 +63,7 @@ class WorkflowBuilder(object):
     def new_task(self, task_name, previous, is_hook, priority, assigned_queue, periodic):
         task_id = uuid()
         if periodic:
+            # periodic 任务统一放到单独的 worker 执行
             signature = cel.tasks.get(task_name).subtask(
                 task_id=task_id,
                 queue=cel.app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"]
@@ -183,7 +190,7 @@ class WorkflowBuilder(object):
         if not periodic:
             # 不是 periodic 任务会把 start 和 end 任务放在 NON_SUBMODULE_TASKS_QUEUE_NAME 里面
             # 因为现在 periodic 任务都是单任务不需要 pipeline, 但是如果之后变成了多任务的 pipeline 
-            # 这类需要进行修改
+            # 这里需要进行修改
             task_assigned_queue = cel.app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"]
             self.canvas_phase.insert(0, CanvasPhase(
                 start.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority),
@@ -228,7 +235,6 @@ class WorkflowBuilder(object):
         self.build_hooks()
 
         try:
-            # TODO send task
             return self.canvas.apply_async(
                 # 成功的 hook 会在运行 workflow 的同一个 worker 执行
                 link=self.success_hook_canvas,

@@ -1,10 +1,17 @@
-import importlib
-import os
+import os, sys
 import pkgutil
-from functools import partial
+import importlib
 from pathlib import Path
+from functools import partial
+from billiard.process import current_process
 
-if os.getenv("IS_WORKER") and os.getenv("IS_WORKER").lower() == "true":
+config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
+sys.path.append(f"{config_path.parent.resolve()}/")
+import config
+
+if os.getenv("IS_WORKER") and \
+    os.getenv("IS_WORKER").lower() == "true" and \
+        os.getenv(f"{current_process().pid}") in config.TASK_NAME_MAP:
     os.environ["FORKED_BY_MULTIPROCESSING"] = "1"
     if os.name != "nt":
         from billiard import context
