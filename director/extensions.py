@@ -1,24 +1,24 @@
 import imp
 import sys
 import yaml
-import redis
 import socket
 import importlib
 import sentry_sdk
-import confluent_kafka
 from pathlib import Path
-from celery import Celery
 import os, uuid, requests, json
-from flask_migrate import Migrate
-from sqlalchemy.schema import MetaData
-from flask_sqlalchemy import SQLAlchemy
 from json.decoder import JSONDecodeError
-from confluent_kafka import KafkaException
+from celery import Celery
 from celery.exceptions import SoftTimeLimitExceeded
+from flask_migrate import Migrate
+from flask_json_schema import JsonSchema
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.schema import MetaData
+import confluent_kafka
+from confluent_kafka import KafkaException
 from sentry_sdk.utils import capture_internal_exceptions
 from sentry_sdk.integrations import celery as sentry_celery
-from flask_json_schema import JsonSchema, JsonValidationError
 
+import redis
 from redis.retry import Retry as RetrySync
 from redis.backoff import ExponentialBackoff
 from redis.exceptions import ConnectionError, TimeoutError, BusyLoadingError
