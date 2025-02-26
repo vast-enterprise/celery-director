@@ -28,6 +28,7 @@ config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
 sys.path.append(f"{config_path.parent.resolve()}/")
 import config
 from workers.worker_loader import SubmoduleWorkerLoader
+from workers import worker_config
 
 
 def validate_tasks(task_definition, tasks_config):
@@ -392,7 +393,7 @@ class WorkerLogger:
         self.logger.version = version
 
         if log_dir is None:
-            log_dir = config.LOG_ROOT
+            log_dir = worker_config.LOG_ROOT
         logging_dir = os.path.join(log_dir, os.getenv("ENV"), module_name)
         os.makedirs(logging_dir, exist_ok=True)
         log_filename_format = "{location}.log"
