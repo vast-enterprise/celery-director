@@ -19,6 +19,7 @@ if os.getenv("IS_WORKER") and \
 
 from celery.schedules import crontab
 from flask import Flask, Blueprint, jsonify, request, render_template
+from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
 from director.api import api_bp
@@ -58,6 +59,7 @@ def create_app(
     home_path=os.getenv("DIRECTOR_HOME"), config_path=os.getenv("DIRECTOR_CONFIG"), celery_app: FlaskCelery = None
 ):
     app = DirectorFlask(__name__)
+    CORS(app)
     c = Config(home_path, config_path)
     app.config.from_object(c)
 
