@@ -149,6 +149,10 @@ class CeleryWorkflow:
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
+        try:
+            import tripo_workflows
+        except ImportError:
+            pass
 
     def read_schemas(self):
         folder = Path(self.app.config["DIRECTOR_HOME"]).resolve()

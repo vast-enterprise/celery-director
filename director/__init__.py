@@ -11,7 +11,7 @@ import config
 
 if os.getenv("IS_WORKER") and \
     os.getenv("IS_WORKER").lower() == "true" and \
-        os.getenv(f"{current_process().pid}") in config.TASK_NAME_MAP:
+        os.getenv(f"{current_process().pid}") in config.TASKS_CONFIG:
     os.environ["FORKED_BY_MULTIPROCESSING"] = "1"
     if os.name != "nt":
         from billiard import context
