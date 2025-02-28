@@ -43,7 +43,8 @@ class Config(object):
         self.STATIC_FOLDER = env.str(
             "DIRECTOR_STATIC_FOLDER", str(Path(self.DIRECTOR_HOME).resolve() / "static")
         )
-        self.API_URL = env.str("DIRECTOR_API_URL", "http://127.0.0.1:8000/api")
+        k8s_node_ip = f"{os.getenv('NODE_IP')}:30001/api"
+        self.API_URL = k8s_node_ip
         self.FLOWER_URL = env.str("DIRECTOR_FLOWER_URL", "http://127.0.0.1:5555")
         self.WORKFLOWS_PER_PAGE = env.int("DIRECTOR_WORKFLOWS_PER_PAGE", 1000)
         self.REFRESH_INTERVAL = env.int("DIRECTOR_REFRESH_INTERVAL", 30000)
