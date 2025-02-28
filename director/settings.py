@@ -48,7 +48,6 @@ class Config(object):
             self.API_URL = API_URL
         else:
             self.API_URL = env.str("DIRECTOR_API_URL", "http://127.0.0.1:8000/api")
-        print(f"self.API_URL是: {self.API_URL}")
         self.FLOWER_URL = env.str("DIRECTOR_FLOWER_URL", "http://127.0.0.1:5555")
         self.WORKFLOWS_PER_PAGE = env.int("DIRECTOR_WORKFLOWS_PER_PAGE", 1000)
         self.REFRESH_INTERVAL = env.int("DIRECTOR_REFRESH_INTERVAL", 30000)
