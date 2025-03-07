@@ -127,8 +127,8 @@ def create_app(
                             workflow,
                             periodic_payload,
                         ),
-                        # beat 会把 periodic 的任务推送到下边拿到 queue 里
-                        "options": {"queue": app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"]},
+                        # beat 会把 periodic 的任务推送到下边拿到 queue 里, 5 秒过期
+                        "options": {"queue": app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"], "expires": 5},
                     }
                 }
             )
