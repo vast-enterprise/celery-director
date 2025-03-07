@@ -53,8 +53,8 @@ def validate_tasks(task_definition, tasks_config):
                 validate_tasks(value, tasks_config)
             else: # 有条件的任务
                 if task_name not in tasks_config:
-                    raise WorkflowSyntaxError(f"task '{task_name}' is not found in {config.TASKS_CONFIG_PATH}")
-
+                    pass
+                    # raise WorkflowSyntaxError(f"task '{task_name}' is not found in {config.TASKS_CONFIG_PATH}")
 
 
 def format_yaml(yaml_data):
