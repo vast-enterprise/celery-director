@@ -21,3 +21,4 @@ fi
 # 复制 wheel 文件到 algo 目录
 cp "$WHEEL_FILE" ../
 echo "已复制 $(basename "$WHEEL_FILE") 到 algo-server/"
+rm -rf build

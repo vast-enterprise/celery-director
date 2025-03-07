@@ -83,6 +83,8 @@ class Config(object):
                 "queue_order_strategy": "priority", 
                 "priority_steps": config.PRIORITY_LIST
             },
+            "worker_hijack_root_logger": False,
+            "worker_redirect_stdouts": False
         }
 
         # Sentry configuration
