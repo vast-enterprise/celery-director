@@ -53,11 +53,6 @@ def validate_tasks(task_definition, tasks_config):
                 if task_name not in tasks_config:
                     raise WorkflowSyntaxError(f"task '{task_name}' is not found in {config.TASKS_CONFIG_PATH}")
 
-                condition_key = tasks_config[task_name]["condition_key"]
-                c1 = isinstance(condition_key, str) and value != condition_key
-                c2 = isinstance(condition_key, set) and value not in condition_key
-                if c1 or c2:
-                    raise WorkflowSyntaxError(f"condition_key '{condition_key}' is not found in {config.TASKS_CONFIG_PATH}")
 
 
 def format_yaml(yaml_data):
