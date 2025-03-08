@@ -11,7 +11,7 @@ from celery import Celery
 from celery.exceptions import SoftTimeLimitExceeded
 from flask_migrate import Migrate
 from flask_json_schema import JsonSchema
-from flask_sqlalchemy import SQLAlchemy as _BaseSQLAlchemy
+from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.schema import MetaData
 import confluent_kafka
 from confluent_kafka import KafkaException
@@ -257,14 +257,6 @@ class DirectorSentry:
             return event
 
         return event_processor
-
-
-class SQLAlchemy(_BaseSQLAlchemy):
-    # https://github.com/pallets-eco/flask-sqlalchemy/issues/589#issuecomment-361075700
-    def apply_pool_defaults(self, app, options):
-        options = super().apply_pool_defaults(app, options)
-        options["pool_pre_ping"] = True
-        return options
 
 
 # Redis Extension
