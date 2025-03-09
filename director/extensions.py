@@ -438,7 +438,7 @@ db = SQLAlchemy(
 )
 migrate = Migrate()
 schema = JsonSchema()
-cel = FlaskCelery("director", broker_connection_retry_on_startup=True, loader=SubmoduleWorkerLoader, worker_redirect_stdouts=False)
+cel = FlaskCelery("director", broker_connection_retry_on_startup=True, loader=SubmoduleWorkerLoader)
 cel_workflows = CeleryWorkflow()
 sentry = DirectorSentry()
 
