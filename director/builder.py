@@ -155,7 +155,7 @@ class WorkflowBuilder(object):
                     current = canvas_phase[-1]
                 else:
                     current = parent
-                group_canvas_phase = self.parse_recursive(group_task, task_type, current, queues, conditions, priority, is_hook)
+                group_canvas_phase = self.parse_recursive(group_task, task_type, current, queues, conditions, priority, is_hook, periodic)
                 if group_canvas_phase:
                     canvas_phase.append(group_canvas_phase)
 
