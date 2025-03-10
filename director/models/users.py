@@ -5,6 +5,8 @@ from sqlalchemy_utils import UUIDType
 from director.extensions import db
 from director.exceptions import UserNotFound
 from director.models import BaseModel
+from sqlalchemy.types import String
+from sqlalchemy import Column
 
 
 def get_uuid():
@@ -13,17 +15,17 @@ def get_uuid():
 class User(BaseModel):
     __tablename__ = "celery_users"
 
-    id = db.Column(
+    id = Column(
         UUIDType(binary=False), primary_key=True, nullable=False, default=get_uuid
     )
-    username = db.Column(db.String(255), unique=True, nullable=False)
-    password = db.Column(db.String(255), nullable=False)
+    username = Column(String(255), unique=True, nullable=False)
+    password = Column(String(255), nullable=False)
 
     def __repr__(self):
         return f"<User {self.username}>"
 
-    def update(self):
-        user = self.query.filter_by(username=self.username).first()
+    def update(self, session):
+        user = session.query(User).filter_by(username=self.username).first()
         if not user:
             raise UserNotFound(f"User {self.username} not found")
 
@@ -31,8 +33,8 @@ class User(BaseModel):
 
         self.commit()
 
-    def delete(self):
-        db.session.delete(self)
+    def delete(session, self):
+        session.delete(self)
 
         self.commit()
 

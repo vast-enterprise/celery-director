@@ -5,6 +5,8 @@ from terminaltables import AsciiTable
 from director.context import pass_ctx
 from director.exceptions import UserNotFound
 from director.models.users import User
+from director.extensions import db_engine
+from sqlalchemy.orm import Session
 
 import click
 
@@ -40,7 +42,10 @@ def list_users(ctx):
 def create_user(ctx, username, password):
     """Create user"""
     user = User(username=username, password=generate_password_hash(password))
-    user.save()
+    db_session = db_engine.get_db_session()
+    with db_session() as session:
+        user.save(session)
+        session.commit()
 
 
 @user.command(name="update")
@@ -51,7 +56,9 @@ def update_user(ctx, username, password):
     """Update user"""
     user = User(username=username, password=generate_password_hash(password))
     try:
-        user.update()
+        db_session = db_engine.get_db_session()
+        with db_session() as session:
+            user.update(session)
     except UserNotFound as e:
         click.echo(str(e))
 
@@ -61,9 +68,10 @@ def update_user(ctx, username, password):
 @pass_ctx
 def delete_user(ctx, username):
     """delete user"""
-    user = User.query.filter_by(username=username).first()
-    if not user:
-        click.echo(f"User {username} not found")
-        return
-
-    user.delete()
+    db_session = db_engine.get_db_session()
+    with db_session() as session:
+        user = session.query(User).filter_by(username=username).first()
+        if not user:
+            click.echo(f"User {username} not found")
+            return
+        user.delete(session)

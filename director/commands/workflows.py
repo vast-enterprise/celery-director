@@ -9,7 +9,7 @@ from flask_json_schema import JsonValidationError
 from director.builder import WorkflowBuilder
 from director.context import pass_ctx
 from director.exceptions import WorkflowNotFound
-from director.extensions import cel_workflows
+from director.extensions import cel_workflows, db_engine
 from director.models.workflows import Workflow
 from director.utils import validate, format_schema_errors, build_celery_schedule
 
@@ -151,12 +151,13 @@ def run_workflow(ctx, fullname, payload, comment):
     # Create the workflow object
     # 把 v2.0-20240919:image2model 拆开
     model_version, task_name = fullname.split(":")
-    obj = Workflow(tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
-    obj.save()
+    obj = Workflow(id=task_id, tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
+    db_session = db_engine.get_db_session()
+    with db_session() as session:
+        obj.save(session)
+        session.commit()
 
     # Build the canvas and execute it
-    # 用 obj.id 主要是怕未来如果有任务重试，用 task_id 做主键会有重复
-    # TODO 在网页端增加利用 task_id 搜索
     _workflow = WorkflowBuilder(obj.id)
 
     # conditions 是一个字典, 里面决定某些子任务是否执行
@@ -179,14 +180,16 @@ def cancel_workflow(ctx, id):
     except ValueError:
         click.echo(f"Invalid UUID")
         raise click.Abort()
-    obj = Workflow.query.filter_by(id=id).first()
-    if not obj:
-        click.echo(f"Workflow {id} does not exist")
-        raise click.Abort()
+    db_session = db_engine.get_db_session()
+    with db_session() as session:
+        obj = session.query(Workflow).filter_by(id=id).first()
+        if not obj:
+            click.echo(f"Workflow {id} does not exist")
+            raise click.Abort()
 
-    workflow = WorkflowBuilder(obj.id)
-    workflow.cancel()
-
+        workflow = WorkflowBuilder(obj.id)
+        workflow.cancel(session)
+        session.commit()
     click.echo(f"Workflow {id} canceled")
 
 
@@ -200,14 +203,17 @@ def relaunch_workflow(ctx, id):
     except ValueError:
         click.echo(f"Invalid UUID")
         raise click.Abort()
-    obj = Workflow.query.filter_by(id=id).first()
-    if not obj:
-        click.echo(f"Workflow {id} does not exist")
-        raise click.Abort()
+    db_session = db_engine.get_db_session()
+    with db_session() as session:
+        obj = session.query(Workflow).filter_by(id=id).first()
+        if not obj:
+            click.echo(f"Workflow {id} does not exist")
+            raise click.Abort()
 
-    # Create the workflow in DB
-    obj = Workflow(tripo_task_id=obj.tripo_task_id, project=obj.model_version, name=obj.task_name, payload=obj.payload)
-    obj.save()
+        # Create the workflow in DB
+        obj = Workflow(id=obj.id, tripo_task_id=obj.tripo_task_id, project=obj.model_version, name=obj.task_name, payload=obj.payload)
+        obj.save(session)
+        session.commit()
 
     # Build the workflow and execute it
     workflow = WorkflowBuilder(obj.id)

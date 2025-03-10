@@ -3,9 +3,13 @@ import uuid
 from sqlalchemy_utils import UUIDType
 from sqlalchemy.types import PickleType
 
-from director.extensions import db
 from director.models import BaseModel, StatusType
 from director.models.utils import JSONBType
+
+from sqlalchemy.types import Enum, Boolean, String
+from sqlalchemy import Column, ForeignKey
+from sqlalchemy.orm import relationship
+from sqlalchemy.orm import backref
 
 
 def get_uuid():
@@ -15,25 +19,25 @@ def get_uuid():
 class Task(BaseModel):
     __tablename__ = "celery_tasks"
 
-    id = db.Column(
+    id = Column(
         UUIDType(binary=False), primary_key=True, nullable=False, default=get_uuid
     )
-    key = db.Column(db.String(255), nullable=False)
-    status = db.Column(db.Enum(StatusType), default=StatusType.pending, nullable=False)
-    previous = db.Column(JSONBType, default=[])
-    result = db.Column(PickleType)
-    is_hook = db.Column(db.Boolean, default=False)
-    data = db.Column(db.String(255), nullable=True)
+    key = Column(String(255), nullable=False)
+    status = Column(Enum(StatusType), default=StatusType.pending, nullable=False)
+    previous = Column(JSONBType, default=[])
+    result = Column(PickleType)
+    is_hook = Column(Boolean, default=False)
+    data = Column(String(255), nullable=True)
     
     # Relationship
-    workflow_id = db.Column(
+    workflow_id = Column(
         UUIDType(binary=False),
-        db.ForeignKey("celery_workflows.id", ondelete="cascade"),
+        ForeignKey("celery_workflows.id", ondelete="cascade"),
         nullable=False,
         index=True,
     )
-    workflow = db.relationship(
-        "Workflow", backref=db.backref("tasks", lazy=True), cascade="all,delete"
+    workflow = relationship(
+        "Workflow", backref=backref("tasks", lazy=True), cascade="all,delete"
     )
 
     def __repr__(self):

@@ -2,7 +2,7 @@ from celery import chain
 from celery.utils import uuid
 from celery.utils.log import get_task_logger
 
-from director.extensions import cel
+from director.extensions import cel, db_engine
 from director.models import StatusType
 from director.models.tasks import Task
 
@@ -20,10 +20,13 @@ def ping():
 @cel.task()
 def mark_as_canceled_pending_tasks(workflow_id):
     logger.info(f"Mark as cancelled pending tasks of the workflow {workflow_id}")
-    tasks = Task.query.filter_by(workflow_id=workflow_id, status=StatusType.pending)
-    for task in tasks:
-        task.status = StatusType.canceled
-        task.save()
+    db_session = db_engine.get_db_session()
+    with db_session() as session:
+        tasks = session.query(Task).filter_by(workflow_id=workflow_id, status=StatusType.pending)
+        for task in tasks:
+            task.status = StatusType.canceled
+            task.save(session)
+        session.commit()
 
 
 @cel.task()
@@ -47,7 +50,10 @@ def failure_hooks_launcher(workflow_id, queue, tasks_names, payload):
             status=StatusType.pending,
             is_hook=True,
         )
-        task.save()
+        session = db_engine.get_db_session()
+        with session() as session:
+            task.save(session)
+            session.commit()
 
         canvas.append(signature)
 

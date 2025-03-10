@@ -23,7 +23,7 @@ from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
 from director.api import api_bp
-from director.extensions import FlaskCelery, cel, cel_workflows, db, schema, sentry, migrate
+from director.extensions import FlaskCelery, cel, cel_workflows, db, schema, sentry, migrate, db_engine
 from director.settings import Config, UserConfig
 from director.tasks.base import BaseTask
 from director.utils import build_celery_schedule
@@ -85,7 +85,8 @@ def create_app(
     # Init extensions
     db.init_app(app)
     db.app = app
-
+    db_engine.init_engine()
+    print("初始化db engine")
     migrate.init_app(
         app=app,
         db=db,

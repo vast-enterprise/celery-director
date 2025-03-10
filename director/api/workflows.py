@@ -7,12 +7,14 @@ from director.api import api_bp, validate
 from director.auth import auth
 from director.builder import WorkflowBuilder
 from director.exceptions import WorkflowNotFound
-from director.extensions import cel_workflows, schema
+from director.extensions import cel_workflows, schema, db_engine
 from director.models.workflows import Workflow
 
 
 def _get_workflow(workflow_id):
-    workflow = Workflow.query.filter_by(id=workflow_id).first()
+    db_session = db_engine.get_db_session()
+    with db_session() as session:
+        workflow = session.query(Workflow).filter_by(id=workflow_id).first()
     if not workflow:
         abort(404, f"Workflow {workflow_id} not found")
     return workflow
@@ -32,24 +34,29 @@ def _execute_workflow(model_version, task_name, payload={}, comment=None):
     task_id = payload["data"]["task_id"]
     mapped_priority = payload["mapped_priority"]
     # Create the workflow in DB
-    obj = Workflow(id=task_id, tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
-    obj.save()
+    db_session = db_engine.get_db_session()
+    with db_session() as session:
+        obj = Workflow(id=task_id, tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
+        obj.save(session)
+        session.commit()
+        obj_dict = obj.to_dict()
 
     # Build the workflow and execute it
-    _ = obj.to_dict()
     workflow = WorkflowBuilder(obj.id)
     conditions = payload["conditions"]
     queues = payload["queues"]
     workflow.run(queues, mapped_priority, conditions)
-
     app.logger.info(f"Workflow sent : {workflow.canvas}")
-    return obj.to_dict(), workflow
+
+    return obj_dict, workflow
 
 
 def _cancel_workflow(obj):
-    workflow = WorkflowBuilder(obj.id)
-    workflow.cancel()
-
+    db_session = db_engine.get_db_session()
+    with db_session() as session:
+        workflow = WorkflowBuilder(obj.id)
+        workflow.cancel(session)
+        session.commit()
     app.logger.info(f"Workflow {obj.id} canceled")
     return obj.to_dict(), workflow
 

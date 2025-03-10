@@ -11,13 +11,18 @@ from celery import Celery
 from celery.exceptions import SoftTimeLimitExceeded
 from flask_migrate import Migrate
 from flask_json_schema import JsonSchema
-from flask_sqlalchemy import SQLAlchemy as _BaseSQLAlchemy
+from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.schema import MetaData
 import confluent_kafka
 from confluent_kafka import KafkaException
 from sentry_sdk.utils import capture_internal_exceptions
 from sentry_sdk.integrations import celery as sentry_celery
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import scoped_session
+from sqlalchemy.orm import sessionmaker
+import logging
+from logging import handlers
 import redis
 from redis.retry import Retry as RetrySync
 from redis.backoff import ExponentialBackoff
@@ -198,8 +203,9 @@ class DirectorSentry:
     def enrich_tags(self, tags, workflow_id, task):
         from director.models.workflows import Workflow
 
-        with self.app.app_context():
-            workflow_obj = Workflow.query.filter_by(id=workflow_id).first()
+        db_session = db_engine.get_db_session()
+        with db_session() as session:
+            workflow_obj = session.query(Workflow).filter_by(id=workflow_id).first()
             workflow = {
                 "id": str(workflow_obj.id),
                 "project": workflow_obj.project,
@@ -259,11 +265,14 @@ class DirectorSentry:
         return event_processor
 
 
-class SQLAlchemy(_BaseSQLAlchemy):
-    def apply_pool_defaults(self, app, options):
-        options = super().apply_pool_defaults(app, options)
-        options["pool_pre_ping"] = True
-        return options
+class DbEngine:
+    def __init__(self):
+        self.engine = None
+    def init_engine(self):
+        self.engine = create_engine(url=os.getenv("DB_URL"), pool_size=10, max_overflow=0, pool_pre_ping=True, pool_recycle=3600)
+        self.session_factory = scoped_session(sessionmaker(bind=self.engine))
+    def get_db_session(self):
+        return self.session_factory
 
 
 # Redis Extension
@@ -272,14 +281,15 @@ class RedisClient:
         self.conn = None
 
     def init_redis(self):
-        retry_sync = RetrySync(ExponentialBackoff(), retries=5)
-        self.conn = redis.from_url(os.getenv('REDIS_URL'),
-                                    password=os.getenv("REDIS_PASSWD"),
-                                    retry=retry_sync,
-                                    retry_on_error=[ConnectionError, BusyLoadingError, TimeoutError],
-                                    db=os.getenv('DIRECTOR_BROKER_REDIS_DB'),
-                                    decode_responses=True
-                                )
+        if self.conn is None:
+            retry_sync = RetrySync(ExponentialBackoff(), retries=5)
+            self.conn = redis.from_url(os.getenv('REDIS_URL'),
+                                        password=os.getenv("REDIS_PASSWD"),
+                                        retry=retry_sync,
+                                        retry_on_error=[ConnectionError, BusyLoadingError, TimeoutError],
+                                        db=os.getenv('DIRECTOR_BROKER_REDIS_DB'),
+                                        decode_responses=True
+                                    )
 
     def ping(self):
         return self.conn.ping()
@@ -317,7 +327,8 @@ class KafkaClient:
         self.producer = None
 
     def init_kafka(self, kafka_configs):
-        self.producer = confluent_kafka.Producer(kafka_configs)
+        if self.producer is None:
+            self.producer = confluent_kafka.Producer(kafka_configs)
 
     def _decompose_msg(self, msg):
         return {
@@ -363,8 +374,6 @@ class Logger(object):
 
         self.task_id = None
 
-import logging
-from logging import handlers
 
 # Worker Logger Extension
 class WorkerLogger:
@@ -424,7 +433,6 @@ class WorkerLogger:
         return self.logger.logger
 
 
-# List of extensions
 db = SQLAlchemy(
     metadata=MetaData(
         naming_convention={
@@ -436,6 +444,8 @@ db = SQLAlchemy(
         }
     )
 )
+# List of extensions
+db_engine = DbEngine()
 migrate = Migrate()
 schema = JsonSchema()
 cel = FlaskCelery("director", broker_connection_retry_on_startup=True, loader=SubmoduleWorkerLoader)

@@ -3,7 +3,7 @@ from flask import jsonify, abort
 from flask_httpauth import HTTPBasicAuth
 
 from director.models.users import User
-
+from director.extensions import db_engine
 from werkzeug.security import check_password_hash
 
 ANONYMOUS_USERNAME = "anonymous"
@@ -20,8 +20,9 @@ def verify_password(username, password):
     # return false if auth is enabled and no username is set
     if not username:
         return
-
-    user = User.query.filter_by(username=username).first()
+    db_session = db_engine.get_db_session()
+    with db_session() as session:
+        user = session.query(User).filter_by(username=username).first()
     if not user:
         return
 

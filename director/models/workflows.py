@@ -4,6 +4,9 @@ from sqlalchemy_utils import UUIDType
 from director.extensions import db
 from director.models import BaseModel, StatusType
 from director.models.utils import JSONBType
+from sqlalchemy.types import Enum, Boolean, String
+from sqlalchemy import Column
+
 
 def get_uuid():
     return str(uuid.uuid4())
@@ -11,16 +14,16 @@ def get_uuid():
 class Workflow(BaseModel):
     __tablename__ = "celery_workflows"
 
-    id = db.Column(
+    id = Column(
         UUIDType(binary=False), primary_key=True, nullable=False, default=get_uuid
     )
-    tripo_task_id = db.Column(db.String(255), nullable=False, index=True)
-    task_name = db.Column(db.String(255), nullable=False)
-    model_version = db.Column(db.String(255), nullable=False)
-    status = db.Column(db.Enum(StatusType), default=StatusType.pending, nullable=False)
-    payload = db.Column(JSONBType, default={})
-    periodic = db.Column(db.Boolean, default=False)
-    comment = db.Column(db.String(255))
+    tripo_task_id = Column(String(255), nullable=False, index=True)
+    task_name = Column(String(255), nullable=False)
+    model_version = Column(String(255), nullable=False)
+    status = Column(Enum(StatusType), default=StatusType.pending, nullable=False)
+    payload = Column(JSONBType, default={})
+    periodic = Column(Boolean, default=False)
+    comment = Column(String(255))
 
     def __str__(self):
         return f"{self.model_version}:{self.task_name}"

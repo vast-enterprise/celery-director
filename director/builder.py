@@ -4,7 +4,7 @@ from celery import chain, group
 from celery.utils import uuid
 
 from director.exceptions import WorkflowSyntaxError
-from director.extensions import cel, cel_workflows
+from director.extensions import cel, cel_workflows, db_engine
 from director.models import StatusType
 from director.models.tasks import Task
 from director.models.workflows import Workflow
@@ -46,7 +46,9 @@ class WorkflowBuilder(object):
     @property
     def workflow(self):
         if not self._workflow:
-            self._workflow = Workflow.query.filter_by(id=self.workflow_id).first()
+            session = db_engine.get_db_session()
+            with session() as session:
+                self._workflow = session.query(Workflow).filter_by(id=self.workflow_id).first()
         return self._workflow
 
 
@@ -74,7 +76,10 @@ class WorkflowBuilder(object):
                 workflow_id=self.workflow.id,
                 status=StatusType.pending,
             )
-            task.save()
+            session = db_engine.get_db_session()
+            with session() as session:
+                task.save(session)
+                session.commit()
             return signature
 
         # We create the Celery task specifying its UID
@@ -98,7 +103,10 @@ class WorkflowBuilder(object):
             status=StatusType.pending,
             is_hook=is_hook,
         )
-        task.save()
+        session = db_engine.get_db_session()
+        with session() as session:
+            task.save(session)
+            session.commit()
 
         return signature
 
@@ -243,17 +251,20 @@ class WorkflowBuilder(object):
             )
 
         except Exception as e:
-            self.workflow.status = StatusType.error
-            self.workflow.save()
-            raise e
+            session = db_engine.get_db_session()
+            with session() as session:
+                self.workflow.status = StatusType.error
+                self.workflow.save(session)
+                session.commit()
+                raise e
 
 
-    def cancel(self):
+    def cancel(self, session):
         status_to_cancel = set([StatusType.pending, StatusType.progress])
         for task in self.workflow.tasks:
             if task.status in status_to_cancel:
                 cel.control.revoke(str(task.id), terminate=True)
                 task.status = StatusType.canceled
-                task.save()
+                task.save(session)
         self.workflow.status = StatusType.canceled
-        self.workflow.save()
+        self.workflow.save(session)
