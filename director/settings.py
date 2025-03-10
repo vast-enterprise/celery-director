@@ -84,7 +84,9 @@ class Config(object):
                 "priority_steps": config.PRIORITY_LIST
             },
             "worker_hijack_root_logger": False,
-            "worker_redirect_stdouts": False
+            "worker_redirect_stdouts": False,
+            "enable_utc": True,
+            "timezone": "Asia/Shanghai"
         }
 
         # Sentry configuration

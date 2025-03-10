@@ -97,16 +97,16 @@ const store = new Vuex.Store({
       var haveHook = false;
 
       for (let i = 0; i < tasks.length; i++) {
-	if(tasks[i].is_hook && !terminatedStatus.includes(tasks[i].status)) {
-	  continue;
-	}
+        if (tasks[i].is_hook && !terminatedStatus.includes(tasks[i].status)) {
+          continue;
+        }
 
-	var graph = graphMain;
-	if(tasks[i].is_hook) {
-	  graph = graphHook;
-	  haveHook = true;
-	}
-	
+        var graph = graphMain;
+        if (tasks[i].is_hook) {
+          graph = graphHook;
+          haveHook = true;
+        }
+
         var className = tasks[i].status;
         var html = "<div class=pointer>";
         html += "<span class=status></span>";
@@ -130,29 +130,64 @@ const store = new Vuex.Store({
       }
 
       function initGraph(graph, svgClass) {
-	// Set some general styles
-	graph.nodes().forEach(function (v) {
+        // Set some general styles
+        graph.nodes().forEach(function (v) {
           var node = graph.node(v);
           node.rx = node.ry = 5;
-	});
+        });
 
-	var svg = d3.select("svg."+svgClass),
-            inner = svg.select('g');
+        var svg = d3.select("svg." + svgClass),
+          inner = svg.select('g');
 
-	// Set up zoom support
-	var zoom = d3.zoom().on("zoom", function () {
+        // Set up zoom support
+        var zoom = d3.zoom().on("zoom", function () {
           inner.attr("transform", d3.event.transform);
-	});
-	inner.call(zoom.transform, d3.zoomIdentity);
-	svg.call(zoom);
+        });
 
-	// Create the renderer
-	var render = new dagreD3.render();
-	render(inner, graph);
+        // 创建渲染器
+        var render = new dagreD3.render();
+        render(inner, graph);
 
-	// Handle the click
-	var nodes = inner.selectAll("g.node");
-	nodes.on("click", function (task_id) {
+        // 添加居中代码 - 开始
+        // 获取图形的尺寸
+        var graphWidth = graph.graph().width || 0;
+        var graphHeight = graph.graph().height || 0;
+
+        // 获取 SVG 的尺寸
+        var svgWidth = parseInt(svg.style("width"));
+        var svgHeight = parseInt(svg.style("height"));
+
+        // 如果无法获取样式宽度，尝试获取属性宽度
+        if (isNaN(svgWidth)) {
+          svgWidth = svg.attr("width") ? parseInt(svg.attr("width")) : 1000;
+        }
+        if (isNaN(svgHeight)) {
+          svgHeight = svg.attr("height") ? parseInt(svg.attr("height")) : 600;
+        }
+
+        // 计算缩放比例以适应 SVG
+        var xScale = svgWidth / graphWidth;
+        var yScale = svgHeight / graphHeight;
+        var scale = Math.min(xScale, yScale, 1) * 0.9; // 稍微缩小一点以留出边距
+
+        // 计算居中位置
+        var xCenterOffset = (svgWidth - graphWidth * scale) / 2;
+        var yCenterOffset = (svgHeight - graphHeight * scale) / 2;
+
+        // 应用初始变换以居中图形
+        inner.call(
+          zoom.transform,
+          d3.zoomIdentity
+            .translate(xCenterOffset, yCenterOffset)
+            .scale(scale)
+        );
+        // 添加居中代码 - 结束
+
+        svg.call(zoom);
+
+        // Handle the click
+        var nodes = inner.selectAll("g.node");
+        nodes.on("click", function (task_id) {
           graph.nodes().forEach(function (v) {
             if (v == task_id) {
               graph.node(v).style = "fill: #f0f0f0; stroke-width: 2px; stroke: #777;";
@@ -163,14 +198,14 @@ const store = new Vuex.Store({
 
           render(inner, graph);
           state.selectedTask = tasks.find((c) => c.id == task_id);
-	});
+        });
       }
 
       state.hideHooks = !haveHook;
 
       Vue.nextTick(function () {
-	initGraph(graphMain, "svg-main");
-	initGraph(graphHook, "svg-hooks");
+        initGraph(graphMain, "svg-main");
+        initGraph(graphHook, "svg-hooks");
       });
     },
     changeLoadingState(state, loading) {
@@ -242,7 +277,7 @@ new Vue({
           align: "left",
           value: "comment",
           align: store.state.workflows.filter(
-            workflow => workflow.comment != null).length === 0 
+            workflow => workflow.comment != null).length === 0
             && " d-none"
         },
         {
@@ -331,7 +366,7 @@ new Vue({
 
     isCommentFieldActive: function () {
       return this.$store.state.workflows.filter(
-        workflow => workflow.comment != null).length > 0 
+        workflow => workflow.comment != null).length > 0
     },
 
     selectRow: function (item) {
@@ -343,7 +378,7 @@ new Vue({
             id: item.id,
           },
         })
-        .catch(() => {});
+        .catch(() => { });
 
       this.$store.dispatch("getWorkflow", item.id);
     },
@@ -434,7 +469,7 @@ new Vue({
     }, REFRESH_INTERVAL);
 
     if (this.$route.name == "definitions") {
-        this.isHome = false;
+      this.isHome = false;
     }
 
     let workflowID = this.$route.params.id;
