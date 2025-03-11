@@ -83,7 +83,7 @@ class WorkflowBuilder(object):
                     "payload": self.workflow.payload},
             queue=assigned_queue,
             task_id=task_id,
-            expires=3600 # TODO: 应该放在设置里
+            expires=60 # TODO: 应该放在设置里
         )
         signature.set(priority=priority)
         
