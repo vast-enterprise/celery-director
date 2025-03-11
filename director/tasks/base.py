@@ -50,17 +50,3 @@ class BaseTask(_Task):
 
         logger.info(f"Task {task_id} is now in success")
         super(BaseTask, self).on_success(retval, task_id, args, kwargs)
-
-    def on_revoked(self, request, terminated, signum, expired):
-        task_id = request.id
-        task = Task.query.filter_by(id=task_id).first()
-        if task:
-            task.status = StatusType.canceled
-            if expired:
-                task.result = {"message": "Task expired"}
-                logger.info(f"Task {task_id} expired and is now canceled")
-            else:
-                task.result = {"message": "Task revoked"}
-                logger.info(f"Task {task_id} was revoked and is now canceled")
-            task.save()
-        super(BaseTask, self).on_revoked(request, terminated, signum, expired)
