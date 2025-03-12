@@ -189,22 +189,11 @@ class WorkflowBuilder(object):
         self.canvas_phase = self.parse_wf(self.tasks, queues, conditions, priority, periodic)
         task_assigned_queue = cel.app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"]
         self.canvas_phase.insert(0, CanvasPhase(
-            start.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority),
+            start.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority).set(payload={"workflow_id": self.workflow.id}),
         []))
         self.canvas_phase.append(CanvasPhase(
-            end.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority),
+            end.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority).set(payload={"workflow_id": self.workflow.id}),
         []))
-        # if not periodic:
-        #     # 不是 periodic 任务会把 start 和 end 任务放在 NON_SUBMODULE_TASKS_QUEUE_NAME 里面
-        #     # 因为现在 periodic 任务都是单任务不需要 pipeline, 但是如果之后变成了多任务的 pipeline 
-        #     # 这里需要进行修改
-        #     task_assigned_queue = cel.app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"]
-        #     self.canvas_phase.insert(0, CanvasPhase(
-        #         start.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority),
-        #     []))
-        #     self.canvas_phase.append(CanvasPhase(
-        #         end.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority),
-        #     []))
 
         if self.root_type == "group":
             self.canvas = group([ca.phase for ca in self.canvas_phase], task_id=uuid())
