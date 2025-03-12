@@ -247,6 +247,7 @@ class WorkflowBuilder(object):
                 link=self.success_hook_canvas,
                 # 失败的 hook 会在 celery beat 执行
                 link_error=self.failure_hook_canvas,
+                expires=3600
             )
 
         except Exception as e:
