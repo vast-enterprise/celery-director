@@ -290,26 +290,6 @@ class RedisClient:
     def get_client(self):
         return self.conn
 
-    def acquire_lock(self, lock_key, lock_value, timeout):
-        # https://redis.io/docs/latest/develop/use/patterns/distributed-locks/
-        res = self.conn.set(lock_key, lock_value, ex=timeout, nx=True)
-        print(f"锁被acquire了 {lock_key}: {lock_value}: {res}")
-        return res
-
-    def release_lock(self, lock_key, lock_value):
-        release_lock_lua = """
-        if redis.call("GET", KEYS[1]) == ARGV[1] then
-            return redis.call("del",KEYS[1])
-        else
-            return 0
-        end
-        """
-        # 只有锁的值与当前值相同才能释放锁，防止错误释放其他 pod 的锁
-        release_lock_lua_script = self.conn.register_script(release_lock_lua)
-        result = release_lock_lua_script(keys=[lock_key], args=[lock_value])
-        print(f"锁被release了 {lock_key}|{lock_value}|{result != 0}")
-        return result != 0
-
 
 # Kafka Extension
 class KafkaClient:
