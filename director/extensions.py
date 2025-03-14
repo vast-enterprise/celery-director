@@ -308,6 +308,7 @@ class KafkaClient:
         }
 
     def _produce_with_callback(self, topic, value, key, callback=None):
+        print(f"kafka 消息 debug:{value}")
         def ack(err, msg):
             if err is not None:
                 print('Message delivery failed: {}'.format(err))
