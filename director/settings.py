@@ -64,9 +64,12 @@ class Config(object):
         # SQLAlchemy configuration
         self.SQLALCHEMY_TRACK_MODIFICATIONS = False
         self.SQLALCHEMY_DATABASE_URI = env.str("DIRECTOR_DATABASE_URI", "")
-        self.SQLALCHEMY_ENGINE_OPTIONS = {
-            "pool_recycle": env.int("DIRECTOR_DATABASE_POOL_RECYCLE", -1),
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            'pool_size': 10,
+            'pool_recycle': env.int("DIRECTOR_DATABASE_POOL_RECYCLE", -1),
+            'pool_pre_ping': True
         }
+        self.SQLALCHEMY_ENGINE_OPTIONS = SQLALCHEMY_ENGINE_OPTIONS
 
         # Celery configuration
         self.CELERY_CONF = {
