@@ -22,9 +22,9 @@ class CanvasPhase:
 
 
 class WorkflowBuilder(object):
-    def __init__(self, workflow_id):
+    def __init__(self, workflow_id, wf=None):
         self.workflow_id = workflow_id
-        self._workflow = None
+        self._workflow = wf
 
         self.root_type = cel_workflows.get_type(str(self.workflow))
         self.queue = cel_workflows.get_queue(str(self.workflow))

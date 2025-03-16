@@ -18,7 +18,9 @@ def _get_workflow(workflow_id):
     return workflow
 
 
-def _execute_workflow(model_version, task_name, payload={}, comment=None):
+# 这个函数只被 training server 用, 所以改成 async 也没事
+# celery worker 不会调用这个函数, 不会报错
+async def _execute_workflow(db_session, model_version, task_name, payload={}, comment=None):
     fullname = f"{model_version}:{task_name}"
 
     # Check if the workflow exists
@@ -33,11 +35,12 @@ def _execute_workflow(model_version, task_name, payload={}, comment=None):
     mapped_priority = payload["mapped_priority"]
     # Create the workflow in DB
     obj = Workflow(id=task_id, tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
-    obj.save()
+    db_session.add(obj)
+    await db_session.commit()
+    await db_session.refresh(obj)
 
     # Build the workflow and execute it
-    _ = obj.to_dict()
-    workflow = WorkflowBuilder(obj.id)
+    workflow = WorkflowBuilder(obj.id, obj)
     conditions = payload["conditions"]
     queues = payload["queues"]
     workflow.run(queues, mapped_priority, conditions)

@@ -290,7 +290,8 @@ class RedisClient:
     def get_client(self):
         return self.conn
 
-
+# TODO 目前openapi有问题只能收到这三个partition
+TARGET_PARTITIONS = [1, 3, 5]
 # Kafka Extension
 class KafkaClient:
     def __init__(self):
@@ -307,17 +308,17 @@ class KafkaClient:
             "offset": msg.offset(),
         }
 
-    def _produce_with_callback(self, topic, value, key, callback=None):
-        print(f"kafka 消息 debug:{value}")
+    def _produce_with_callback(self, topic, value, key, partition=None, callback=None):
         def ack(err, msg):
             if err is not None:
                 print('Message delivery failed: {}'.format(err))
             else:
+                print(f"ack 消息:{value}")
                 print('Message delivered to {} [{}]'.format(msg.topic(), msg.partition()))
             if callback:
                 callback(err, msg)
         try:
-            self.producer.produce(topic=topic, value=value, key=key, on_delivery=ack)
+            self.producer.produce(topic=topic, value=value, key=key, on_delivery=ack, partition=partition)
             self.producer.flush()
         except KafkaException as e:
             raise KafkaException(f"Error while producing message: {str(e)}")
@@ -325,8 +326,10 @@ class KafkaClient:
     def produce_message(self, topic, message_dict, task_id):
         try:
             message_dict["msg_key"] = str(uuid.uuid4())
+            hash_value = hash(message_dict["msg_key"])
+            index = hash_value % len(TARGET_PARTITIONS)
             message = json.dumps(message_dict)
-            self._produce_with_callback(topic, message, task_id)
+            self._produce_with_callback(topic, message, task_id, partition=TARGET_PARTITIONS[index])
         except Exception as e:
             print(e)
             return None
