@@ -59,7 +59,6 @@ class WorkflowBuilder(object):
                 return "group"
         return "common"
 
-
     def new_task(self, task_name, previous, is_hook, priority, assigned_queue, periodic):
         task_id = uuid()
         if periodic:
@@ -83,6 +82,7 @@ class WorkflowBuilder(object):
                     "payload": self.workflow.payload},
             queue=assigned_queue,
             task_id=task_id,
+            expires=3600
         )
         signature.set(priority=priority)
         
@@ -236,7 +236,6 @@ class WorkflowBuilder(object):
                 link=self.success_hook_canvas,
                 # 失败的 hook 会在 celery beat 执行
                 link_error=self.failure_hook_canvas,
-                expires=3600
             )
 
         except Exception as e:
