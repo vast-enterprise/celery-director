@@ -290,8 +290,7 @@ class RedisClient:
     def get_client(self):
         return self.conn
 
-# TODO 目前openapi有问题只能收到这三个partition
-TARGET_PARTITIONS = [1, 3, 5]
+
 # Kafka Extension
 class KafkaClient:
     def __init__(self):
@@ -318,18 +317,19 @@ class KafkaClient:
             if callback:
                 callback(err, msg)
         try:
-            self.producer.produce(topic=topic, value=value, key=key, on_delivery=ack, partition=partition)
+            if partition:
+                self.producer.produce(topic=topic, value=value, key=key, on_delivery=ack, partition=partition)
+            else:
+                self.producer.produce(topic=topic, value=value, key=key, on_delivery=ack)
             self.producer.flush()
         except KafkaException as e:
             raise KafkaException(f"Error while producing message: {str(e)}")
 
-    def produce_message(self, topic, message_dict, task_id):
+    def produce_message(self, topic, message_dict, task_id, partition=None):
         try:
             message_dict["msg_key"] = str(uuid.uuid4())
-            hash_value = hash(message_dict["msg_key"])
-            index = hash_value % len(TARGET_PARTITIONS)
             message = json.dumps(message_dict)
-            self._produce_with_callback(topic, message, task_id, partition=TARGET_PARTITIONS[index])
+            self._produce_with_callback(topic, message, task_id, partition)
         except Exception as e:
             print(e)
             return None
