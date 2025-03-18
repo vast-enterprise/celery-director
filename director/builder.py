@@ -2,6 +2,7 @@ import sys, os
 from pathlib import Path
 from celery import chain, group
 from celery.utils import uuid
+from datetime import datetime, timedelta, timezone
 
 from director.exceptions import WorkflowSyntaxError
 from director.extensions import cel, cel_workflows
@@ -82,7 +83,7 @@ class WorkflowBuilder(object):
                     "payload": self.workflow.payload},
             queue=assigned_queue,
             task_id=task_id,
-            expires=3600
+            expires=datetime.now(timezone.utc) + timedelta(hours=1)
         )
         signature.set(priority=priority)
         
