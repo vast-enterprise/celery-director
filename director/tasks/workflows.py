@@ -1,13 +1,9 @@
-import time
-
-from celery.utils.log import get_task_logger
 from celery import chain
 from celery.utils import uuid
-
+from celery.utils.log import get_task_logger
 
 from director.extensions import cel
 from director.models import StatusType
-from director.models.workflows import Workflow
 from director.models.tasks import Task
 
 
@@ -19,28 +15,6 @@ def ping():
     # type: () -> str
     """Simple task that just returns 'pong'."""
     return "pong"
-
-
-@cel.task()
-def start(workflow_id):
-    logger.info(f"Opening the workflow {workflow_id}")
-    workflow = Workflow.query.filter_by(id=workflow_id).first()
-
-    workflow.status = StatusType.progress
-    workflow.save()
-
-
-@cel.task()
-def end(workflow_id):
-    # Waiting for the workflow status to be marked in error if a task failed
-    time.sleep(0.5)
-
-    logger.info(f"Closing the workflow {workflow_id}")
-    workflow = Workflow.query.filter_by(id=workflow_id).first()
-
-    if workflow.status != StatusType.error:
-        workflow.status = StatusType.success
-        workflow.save()
 
 
 @cel.task()

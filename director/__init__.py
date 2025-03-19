@@ -1,15 +1,29 @@
-import importlib
-import os
+import os, sys
 import pkgutil
-from functools import partial
+import importlib
 from pathlib import Path
+from functools import partial
+from billiard.process import current_process
+
+config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
+sys.path.append(f"{config_path.parent.resolve()}/")
+import config
+
+if os.getenv("IS_WORKER") and \
+    os.getenv("IS_WORKER").lower() == "true" and \
+        os.getenv(f"{current_process().pid}") in config.TASKS_CONFIG:
+    os.environ["FORKED_BY_MULTIPROCESSING"] = "1"
+    if os.name != "nt":
+        from billiard import context
+        context._force_start_method("spawn")
 
 from celery.schedules import crontab
 from flask import Flask, Blueprint, jsonify, request, render_template
+from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
 from director.api import api_bp
-from director.extensions import cel, cel_workflows, db, schema, sentry, migrate
+from director.extensions import FlaskCelery, cel, cel_workflows, db, schema, sentry, migrate
 from director.settings import Config, UserConfig
 from director.tasks.base import BaseTask
 from director.utils import build_celery_schedule
@@ -42,9 +56,10 @@ class DirectorFlask(Flask):
 
 # Create the application using a factory
 def create_app(
-    home_path=os.getenv("DIRECTOR_HOME"), config_path=os.getenv("DIRECTOR_CONFIG")
+    home_path=os.getenv("DIRECTOR_HOME"), config_path=os.getenv("DIRECTOR_CONFIG"), celery_app: FlaskCelery = None
 ):
     app = DirectorFlask(__name__)
+    CORS(app)
     c = Config(home_path, config_path)
     app.config.from_object(c)
 
@@ -77,7 +92,10 @@ def create_app(
         directory=str(Path(__file__).resolve().parent / "migrations"),
     )
     schema.init_app(app)
-    cel.init_app(app)
+    new_cel = cel
+    if celery_app is not None:
+        new_cel = celery_app
+    new_cel.init_app(app)
     cel_workflows.init_app(app)
     sentry.init_app(app)
 
@@ -100,8 +118,7 @@ def create_app(
             schedule_str, schedule_value = build_celery_schedule(
                 workflow, periodic_conf
             )
-
-            cel.conf.beat_schedule.update(
+            new_cel.conf.beat_schedule.update(
                 {
                     f"periodic-{workflow}-{schedule_str}": {
                         "task": "director.tasks.periodic.execute",
@@ -110,15 +127,18 @@ def create_app(
                             workflow,
                             periodic_payload,
                         ),
+                        # beat 会把 periodic 的任务推送到下边拿到 queue 里, 5 秒过期
+                        "options": {"queue": app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"], "expires": 5},
                     }
                 }
             )
 
     if len(retentions):
-        cel.conf.beat_schedule.update(
+        new_cel.conf.beat_schedule.update(
             {
                 "periodic-cleanup": {
                     "task": "director.tasks.periodic.cleanup",
+                    # 可以修改 retension 任务的执行频率, 现在是每天凌晨 0 点执行
                     "schedule": crontab(minute=0, hour=0),
                     "args": (retentions,),
                 }

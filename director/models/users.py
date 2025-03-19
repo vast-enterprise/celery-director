@@ -1,17 +1,21 @@
-import json
+import  uuid
 
 from sqlalchemy_utils import UUIDType
-from sqlalchemy.types import PickleType
 
 from director.extensions import db
 from director.exceptions import UserNotFound
-from director.models import BaseModel, StatusType
-from director.models.utils import JSONBType
+from director.models import BaseModel
 
+
+def get_uuid():
+    return str(uuid.uuid4())
 
 class User(BaseModel):
-    __tablename__ = "users"
+    __tablename__ = "celery_users"
 
+    id = db.Column(
+        UUIDType(binary=False), primary_key=True, nullable=False, default=get_uuid
+    )
     username = db.Column(db.String(255), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
 

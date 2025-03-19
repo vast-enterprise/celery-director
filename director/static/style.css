@@ -110,3 +110,22 @@
 .monospacedPayload textarea {
   font-family: "Monospace";
 }
+
+.graph {
+    height: 100%;
+    width: 100%;
+    position: relative;  /* 确保子元素定位正确 */
+}
+
+/* 如果上面不够，可以尝试给父元素也添加高度 */
+.v-container.fill-height {
+    height: 100%;
+}
+
+.v-row.fill-height {
+    height: 100%;
+}
+
+.v-col {
+    height: 100%;
+}

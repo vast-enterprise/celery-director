@@ -1,7 +1,5 @@
-from datetime import datetime, timedelta
 from distutils.util import strtobool
 
-import pytz
 from flask import abort, jsonify, request
 from flask import current_app as app
 
@@ -11,7 +9,6 @@ from director.builder import WorkflowBuilder
 from director.exceptions import WorkflowNotFound
 from director.extensions import cel_workflows, schema
 from director.models.workflows import Workflow
-from director.utils import build_celery_schedule
 
 
 def _get_workflow(workflow_id):
@@ -21,8 +18,10 @@ def _get_workflow(workflow_id):
     return workflow
 
 
-def _execute_workflow(project, name, payload={}, comment=None):
-    fullname = f"{project}.{name}"
+# 这个函数只被 training server 用, 所以改成 async 也没事
+# celery worker 不会调用这个函数, 不会报错
+async def _execute_workflow(db_session, model_version, task_name, payload={}, comment=None):
+    fullname = f"{model_version}:{task_name}"
 
     # Check if the workflow exists
     try:
@@ -32,14 +31,19 @@ def _execute_workflow(project, name, payload={}, comment=None):
     except WorkflowNotFound:
         abort(404, f"Workflow {fullname} not found")
 
+    task_id = payload["data"]["task_id"]
+    mapped_priority = payload["mapped_priority"]
     # Create the workflow in DB
-    obj = Workflow(project=project, name=name, payload=payload, comment=comment)
-    obj.save()
+    obj = Workflow(id=task_id, tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
+    db_session.add(obj)
+    await db_session.commit()
+    await db_session.refresh(obj)
 
     # Build the workflow and execute it
-    data = obj.to_dict()
-    workflow = WorkflowBuilder(obj.id)
-    workflow.run()
+    workflow = WorkflowBuilder(obj.id, obj)
+    conditions = payload["conditions"]
+    queues = payload["queues"]
+    workflow.run(queues, mapped_priority, conditions)
 
     app.logger.info(f"Workflow sent : {workflow.canvas}")
     return obj.to_dict(), workflow
@@ -74,6 +78,11 @@ def create_workflow():
         request.get_json()["payload"],
         request.get_json().get("comment"),
     )
+    if "task_id" not in payload["data"]:
+        return jsonify("no task_id in payload"), 400
+    if "priority" not in payload["data"]:
+        return jsonify("no priority in payload"), 400
+
     data, _ = _execute_workflow(project, name, payload, comment)
     return jsonify(data), 201
 
@@ -84,7 +93,7 @@ def relaunch_workflow(workflow_id):
     obj = _get_workflow(workflow_id)
     if hasattr(obj, "comment"):
         comment = obj.comment
-    data, _ = _execute_workflow(obj.project, obj.name, obj.payload, comment)
+    data, _ = _execute_workflow(obj.model_version, obj.task_name, obj.payload, comment)
     return jsonify(data), 201
 
 
@@ -114,7 +123,7 @@ def list_workflows():
         "per_page", type=int, default=app.config["WORKFLOWS_PER_PAGE"]
     )
     workflows = Workflow.query.order_by(Workflow.created_at.desc()).paginate(
-        page, per_page
+        page=page, per_page=per_page
     )
     return jsonify([w.to_dict(with_payload=with_payload) for w in workflows.items])
 
@@ -135,7 +144,7 @@ def get_workflow(workflow_id):
 def list_definitions():
     workflow_definitions = []
     for fullname, definition in sorted(cel_workflows.workflows.items()):
-        project, name = fullname.split(".", 1)
+        project, name = fullname.split(":", 1)
         workflow_definitions.append(
             {"fullname": fullname, "project": project, "name": name, **definition}
         )

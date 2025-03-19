@@ -2,6 +2,7 @@
 __pycache__/
 venv/
 *.pyc
+new_env/
 
 # Build
 build/

@@ -47,6 +47,7 @@ def worker(dev_mode, worker_args):
             "--loglevel",
             "INFO",
         ]
+
     args += list(worker_args)
     os.execvp(args[0], args)
 

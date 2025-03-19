@@ -13,6 +13,7 @@ from director.extensions import cel_workflows
 from director.models.workflows import Workflow
 from director.utils import validate, format_schema_errors, build_celery_schedule
 
+from director.exceptions import PayloadSyntaxError
 
 def tasks_to_ascii(tasks, hooks):
     tasks_str = ""
@@ -111,6 +112,9 @@ def show_workflow(ctx, name):
 def run_workflow(ctx, fullname, payload, comment):
     """Execute a workflow"""
     try:
+        # fullname 是 workflow 的名字
+        # 目前采用用版本号:任务名称, 中间有一个冒号 :
+        # 例如 v2.0-20240919:image2model
         wf = cel_workflows.get_by_name(fullname)
         payload = json.loads(payload)
 
@@ -132,16 +136,37 @@ def run_workflow(ctx, fullname, payload, comment):
         click.echo(f"Error in the payload : {e}")
         raise click.Abort()
 
+    # 在 payload 里面必须要有 task_id 和 priority
+    if "task_id" not in payload["data"]:
+        raise PayloadSyntaxError("task_id is not found in payload")
+    if "mapped_priority" not in payload:
+        raise PayloadSyntaxError("mapped_priority is not found in payload")
+    if "conditions" not in payload:
+        raise PayloadSyntaxError("conditions(dict) is not found in payload")
+    if "queues" not in payload:
+        raise PayloadSyntaxError("queues(dict) is not found in payload")
+
+    task_id = payload["data"]["task_id"]
+
     # Create the workflow object
-    project, name = fullname.split(".")
-    obj = Workflow(project=project, name=name, payload=payload, comment=comment)
+    # 把 v2.0-20240919:image2model 拆开
+    model_version, task_name = fullname.split(":")
+    obj = Workflow(tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
     obj.save()
 
     # Build the canvas and execute it
+    # 用 obj.id 主要是怕未来如果有任务重试，用 task_id 做主键会有重复
+    # TODO 在网页端增加利用 task_id 搜索
     _workflow = WorkflowBuilder(obj.id)
-    _workflow.run()
 
-    click.echo(f"Workflow {obj.id} launched")
+    # conditions 是一个字典, 里面决定某些子任务是否执行
+    # 如果是空字典  则所有子任务都执行
+    conditions = payload["conditions"]
+    queues = payload["queues"]
+    mapped_priority = payload["mapped_priority"]
+    _workflow.run(queues, mapped_priority, conditions)
+
+    click.echo(f"Workflow {obj.id} for task {task_id} launched")
 
 
 @workflow.command(name="cancel")
@@ -181,11 +206,13 @@ def relaunch_workflow(ctx, id):
         raise click.Abort()
 
     # Create the workflow in DB
-    obj = Workflow(project=obj.project, name=obj.name, payload=obj.payload)
+    obj = Workflow(tripo_task_id=obj.tripo_task_id, project=obj.model_version, name=obj.task_name, payload=obj.payload)
     obj.save()
 
     # Build the workflow and execute it
     workflow = WorkflowBuilder(obj.id)
-    workflow.run()
+    conditions = obj.payload["conditions"]
+    # TODO 参数数量不对
+    workflow.run(conditions)
 
     click.echo(f"Workflow {obj.id} relaunched")
