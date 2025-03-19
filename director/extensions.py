@@ -309,11 +309,11 @@ class KafkaClient:
 
     def _produce_with_callback(self, topic, value, key, partition=None, callback=None):
         def ack(err, msg):
-            if err is not None:
-                print('Message delivery failed: {}'.format(err))
-            else:
-                print(f"ack 消息:{value}")
-                print('Message delivered to {} [{}]'.format(msg.topic(), msg.partition()))
+            # if err is not None:
+            #     print('Message delivery failed: {}'.format(err))
+            # else:
+            #     print(f"ack 消息:{value}")
+            #     print('Message delivered to {} [{}]'.format(msg.topic(), msg.partition()))
             if callback:
                 callback(err, msg)
         try:
