@@ -158,7 +158,7 @@ def list_workflows():
     )
     # 不返回周期任务
     return jsonify([
-        w.to_dict(with_payload=with_payload) for w in workflows.items if w["periodic"] == False
+        w.to_dict(with_payload=with_payload) for w in workflows.items if w.periodic == False
     ])
 
 
