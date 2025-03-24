@@ -1,5 +1,6 @@
+import os, sys
+from pathlib import Path
 from distutils.util import strtobool
-
 from flask import abort, jsonify, request
 from flask import current_app as app
 
@@ -10,6 +11,9 @@ from director.exceptions import WorkflowNotFound
 from director.extensions import cel_workflows, schema
 from director.models.workflows import Workflow
 
+config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
+sys.path.append(f"{config_path.parent.resolve()}/")
+import config
 
 def _get_workflow(workflow_id):
     workflow = Workflow.query.filter_by(id=workflow_id).first()
@@ -41,6 +45,33 @@ async def _execute_workflow(db_session, model_version, task_name, payload={}, co
 
     # Build the workflow and execute it
     workflow = WorkflowBuilder(obj.id, obj)
+    conditions = payload["conditions"]
+    queues = payload["queues"]
+    workflow.run(queues, mapped_priority, conditions)
+
+    app.logger.info(f"Workflow sent : {workflow.canvas}")
+    return obj.to_dict(), workflow
+
+
+def _execute_workflow_relaunch(model_version, task_name, payload={}, comment=None):
+    fullname = f"{model_version}:{task_name}"
+
+    # Check if the workflow exists
+    try:
+        wf = cel_workflows.get_by_name(fullname)
+        if "schema" in wf:
+            validate(payload, wf["schema"])
+    except WorkflowNotFound:
+        abort(404, f"Workflow {fullname} not found")
+
+    task_id = payload["data"]["task_id"]
+    mapped_priority = payload["mapped_priority"]
+    # Create the workflow in DB
+    obj = Workflow(id=task_id, tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
+    obj.save()
+
+    # Build the workflow and execute it
+    workflow = WorkflowBuilder(obj.id)
     conditions = payload["conditions"]
     queues = payload["queues"]
     workflow.run(queues, mapped_priority, conditions)
@@ -93,7 +124,7 @@ def relaunch_workflow(workflow_id):
     obj = _get_workflow(workflow_id)
     if hasattr(obj, "comment"):
         comment = obj.comment
-    data, _ = _execute_workflow(obj.model_version, obj.task_name, obj.payload, comment)
+    data, _ = _execute_workflow_relaunch(obj.model_version, obj.task_name, obj.payload, comment)
     return jsonify(data), 201
 
 
@@ -125,7 +156,10 @@ def list_workflows():
     workflows = Workflow.query.order_by(Workflow.created_at.desc()).paginate(
         page=page, per_page=per_page
     )
-    return jsonify([w.to_dict(with_payload=with_payload) for w in workflows.items])
+    # 不返回周期任务
+    return jsonify([
+        w.to_dict(with_payload=with_payload) for w in workflows.items if w["periodic"] == False
+    ])
 
 
 @api_bp.route("/workflows/<workflow_id>")
