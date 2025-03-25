@@ -1,5 +1,3 @@
-import os, sys
-from pathlib import Path
 from distutils.util import strtobool
 from flask import abort, jsonify, request
 from flask import current_app as app
@@ -11,9 +9,6 @@ from director.exceptions import WorkflowNotFound
 from director.extensions import cel_workflows, schema
 from director.models.workflows import Workflow
 
-config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
-sys.path.append(f"{config_path.parent.resolve()}/")
-import config
 
 def _get_workflow(workflow_id):
     workflow = Workflow.query.filter_by(id=workflow_id).first()
@@ -153,12 +148,14 @@ def list_workflows():
     per_page = request.args.get(
         "per_page", type=int, default=app.config["WORKFLOWS_PER_PAGE"]
     )
-    workflows = Workflow.query.order_by(Workflow.created_at.desc()).paginate(
+    workflows = Workflow.query.filter(
+        Workflow.periodic.is_(False)  # 筛选 periodic 为 False
+    ).order_by(Workflow.created_at.desc()).paginate(
         page=page, per_page=per_page
     )
     # 不返回周期任务
     return jsonify([
-        w.to_dict(with_payload=with_payload) for w in workflows.items if w["periodic"] == False
+        w.to_dict(with_payload=with_payload) for w in workflows.items
     ])
 
 
