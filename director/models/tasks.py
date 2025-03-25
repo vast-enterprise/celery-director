@@ -2,6 +2,7 @@ import uuid
 
 from sqlalchemy_utils import UUIDType
 from sqlalchemy.types import PickleType
+from sqlalchemy.dialects.postgresql import JSON
 
 from director.extensions import db
 from director.models import BaseModel, StatusType
@@ -23,7 +24,7 @@ class Task(BaseModel):
     previous = db.Column(JSONBType, default=[])
     result = db.Column(PickleType)
     is_hook = db.Column(db.Boolean, default=False)
-    data = db.Column(db.String(255), nullable=True)
+    data = db.Column(JSON, nullable=True)
     
     # Relationship
     workflow_id = db.Column(
