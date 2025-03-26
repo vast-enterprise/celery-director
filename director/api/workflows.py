@@ -153,12 +153,16 @@ def list_workflows():
     per_page = request.args.get(
         "per_page", type=int, default=app.config["WORKFLOWS_PER_PAGE"]
     )
-    workflows = Workflow.query.order_by(Workflow.created_at.desc()).paginate(
+
+    workflows = Workflow.query.filter(
+        Workflow.periodic.is_(False)  # 筛选 periodic 为 False
+    ).order_by(Workflow.created_at.desc()).paginate(
         page=page, per_page=per_page
     )
+
     # 不返回周期任务
     return jsonify([
-        w.to_dict(with_payload=with_payload) for w in workflows.items if w.periodic == False
+        w.to_dict(with_payload=with_payload) for w in workflows.items
     ])
 
 
