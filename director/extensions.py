@@ -277,7 +277,7 @@ class RedisClient:
                                     password=os.getenv("REDIS_PASSWD"),
                                     retry=retry_sync,
                                     retry_on_error=[ConnectionError, BusyLoadingError, TimeoutError],
-                                    db=os.getenv('DIRECTOR_BROKER_REDIS_DB'),
+                                    db=os.getenv('WORKER_REDIS_DB'),
                                     decode_responses=True
                                 )
 
