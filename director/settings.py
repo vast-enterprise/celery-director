@@ -85,7 +85,9 @@ class Config(object):
             "worker_hijack_root_logger": False,
             "worker_redirect_stdouts": False,
             "enable_utc": True,
-            "timezone": "Asia/Shanghai"
+            "timezone": "Asia/Shanghai",
+            "task_acks_late": True,
+            "reject_on_worker_lost": True,
         }
 
         # Sentry configuration
