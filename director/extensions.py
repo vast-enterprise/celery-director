@@ -17,6 +17,7 @@ import confluent_kafka
 from confluent_kafka import KafkaException
 from sentry_sdk.utils import capture_internal_exceptions
 from sentry_sdk.integrations import celery as sentry_celery
+
 import redis
 from redis.retry import Retry as RetrySync
 from redis.backoff import ExponentialBackoff
