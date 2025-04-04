@@ -13,11 +13,13 @@ from flask_migrate import Migrate
 from flask_json_schema import JsonSchema
 from flask_sqlalchemy import SQLAlchemy as _BaseSQLAlchemy
 from sqlalchemy.schema import MetaData
+
+import hashlib
 import confluent_kafka
+
 from confluent_kafka import KafkaException
 from sentry_sdk.utils import capture_internal_exceptions
 from sentry_sdk.integrations import celery as sentry_celery
-
 import redis
 from redis.retry import Retry as RetrySync
 from redis.backoff import ExponentialBackoff
@@ -298,6 +300,15 @@ class KafkaClient:
 
     def init_kafka(self, kafka_configs):
         self.producer = confluent_kafka.Producer(kafka_configs)
+        metadata = self.producer.list_topics(timeout=10)
+        if os.getenv("KAFKA_TOPIC") in metadata.topics:
+            num = len(metadata.topics[os.getenv("KAFKA_TOPIC")].partitions)
+        self.num_partitions = num
+
+    def get_partition_from_string(self, string, num_partitions):
+        hash_value = int(hashlib.md5(string.encode('utf-8')).hexdigest(), 16)
+        partition = hash_value % num_partitions
+        return partition
 
     def _decompose_msg(self, msg):
         return {
