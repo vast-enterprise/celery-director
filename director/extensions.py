@@ -298,6 +298,12 @@ class KafkaClient:
 
     def init_kafka(self, kafka_configs):
         self.producer = confluent_kafka.Producer(kafka_configs)
+        metadata = self.producer.list_topics(timeout=10)
+        # 在初始化时去拿 partition 数量
+        try:
+            self.num_partitions = len(metadata.topics[os.getenv("KAFKA_TOPIC")].partitions)
+        except Exception:
+            self.num_partitions = 6
 
     def _decompose_msg(self, msg):
         return {
