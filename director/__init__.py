@@ -23,7 +23,7 @@ from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 
 from director.api import api_bp
-from director.extensions import FlaskCelery, cel, cel_workflows, db, schema, sentry, migrate
+from director.extensions import FlaskCelery, cel, cel_workflows, db, schema, sentry, migrate, redis_client, kafka_client
 from director.settings import Config, UserConfig
 from director.tasks.base import BaseTask
 from director.utils import build_celery_schedule
@@ -39,7 +39,7 @@ task = partial(cel.task, base=BaseTask)
 
 
 # Provide the user config
-config = UserConfig()
+_config = UserConfig()
 
 
 # Custom Flask class
@@ -64,7 +64,7 @@ def create_app(
     app.config.from_object(c)
 
     # Init User's config
-    config.init()
+    _config.init()
 
     # Init Blueprints
     app.register_blueprint(api_bp)
@@ -98,6 +98,19 @@ def create_app(
     new_cel.init_app(app)
     cel_workflows.init_app(app)
     sentry.init_app(app)
+
+    # 在这里给当前线程(特别是主线程)初始一个客户端
+    redis_client.init_redis()
+    kafka_client.init_kafka({
+            'bootstrap.servers': os.getenv("KAFKA_HOST"),
+            'sasl.username':     os.getenv("KAFKA_USERNAME"),
+            'sasl.password':     os.getenv("KAFKA_PASSWORD"),
+            'acks':              'all',
+            'enable.idempotence': True,
+            "retries": 3,
+            'security.protocol': config.SECURITY_PROTOCOL,
+            'sasl.mechanisms':   config.SASL_MECHANISM,
+    })
 
     # Dict passed to the cleanup function
     retentions = {}
