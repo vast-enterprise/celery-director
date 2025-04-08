@@ -1,7 +1,6 @@
 import imp
-import sys
+import os, sys
 import yaml
-import socket
 import importlib
 import sentry_sdk
 from pathlib import Path
@@ -23,12 +22,11 @@ from redis.retry import Retry as RetrySync
 from redis.backoff import ExponentialBackoff
 from redis.exceptions import ConnectionError, TimeoutError, BusyLoadingError
 
-from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound, WorkflowSyntaxError
+from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound
 config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
 sys.path.append(f"{config_path.parent.resolve()}/")
 import config
 from workers.worker_loader import SubmoduleWorkerLoader
-from workers import worker_config
 
 
 def validate_tasks(task_definition, tasks_config):

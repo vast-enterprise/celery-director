@@ -24,6 +24,25 @@ dev_requirements = [
 
 doc_requirements = ["mkdocs==1.3.0", "mkdocs-material==8.2.9"]
 
+current_dir = Path(__file__).resolve().parent  # algo-server/celery-director/
+root_dir = current_dir.parent  # algo-server/
+# 找到celery-director包
+director_packages = find_packages(
+    where=str(current_dir),
+    include=["director", "director.*"]
+)
+# 找到workers包
+workers_packages = find_packages(
+    where=str(root_dir),
+    include=["workers", "workers.*"]
+)
+all_packages = director_packages + workers_packages
+# 设置包到路径的映射
+package_dir = {
+    "director": "director",  # director 包在 celery-director/director 中
+    "workers": "../workers"  # workers 包在 ../workers中（相对于 setup.py）
+}
+
 
 setup(
     name="celery-director",
@@ -35,7 +54,10 @@ setup(
     author="OVHcloud",
     author_email="opensource@ovhcloud.com",
     url="https://github.com/ovh/celery-director",
-    packages=find_packages(),
+    
+    package_dir=package_dir,
+    packages=all_packages,
+
     install_requires=requirements,
     extras_require={
         "dev": dev_requirements,

@@ -1,4 +1,5 @@
-import sys, os
+import os
+import importlib.util
 from pathlib import Path
 from celery import chain, group
 from celery.utils import uuid
@@ -11,8 +12,8 @@ from director.models.tasks import Task
 from director.models.workflows import Workflow
 from director.tasks.workflows import failure_hooks_launcher
 
-workflow_path = Path(os.getenv("DIRECTOR_HOME")).resolve()
-sys.path.append(f"{workflow_path.resolve()}/")
+package_spec = importlib.util.spec_from_file_location("tripo_workflows", os.path.join(Path(os.getenv("DIRECTOR_HOME")).resolve(), "__init__.py"))
+tripo_workflows = importlib.util.module_from_spec(package_spec)
 from tripo_workflows.tasks.start_end_tasks import start, end
 
 
