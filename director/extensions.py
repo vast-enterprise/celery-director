@@ -1,13 +1,15 @@
 import imp
 import sys
 import yaml
-import socket
+import hashlib
 import importlib
 import sentry_sdk
 from pathlib import Path
 import os, uuid, requests, json
 from json.decoder import JSONDecodeError
 from celery import Celery
+from celery import current_app
+from billiard.process import current_process
 from celery.exceptions import SoftTimeLimitExceeded
 from flask_migrate import Migrate
 from flask_json_schema import JsonSchema
@@ -17,6 +19,7 @@ import confluent_kafka
 from confluent_kafka import KafkaException
 from sentry_sdk.utils import capture_internal_exceptions
 from sentry_sdk.integrations import celery as sentry_celery
+
 
 import redis
 from redis.retry import Retry as RetrySync
@@ -305,6 +308,11 @@ class KafkaClient:
         except Exception:
             self.num_partitions = 6
 
+    def get_hash_partition(self, task_id):
+        hash_object = hashlib.sha256(task_id.encode())
+        hash_digest = int(hash_object.hexdigest(), 16)
+        return hash_digest % self.num_partitions
+
     def _decompose_msg(self, msg):
         return {
             "topic": msg.topic(),
@@ -331,11 +339,38 @@ class KafkaClient:
         except KafkaException as e:
             raise KafkaException(f"Error while producing message: {str(e)}")
 
-    def produce_message(self, topic, message_dict, task_id, partition=None):
+    def produce_message(self, message_dict, task_id, topic=None, partition=None):
+        message_dict["msg_key"] = str(uuid.uuid4())
+        message = json.dumps(message_dict)
         try:
-            message_dict["msg_key"] = str(uuid.uuid4())
-            message = json.dumps(message_dict)
-            self._produce_with_callback(topic, message, task_id, partition)
+            # 如果指定了 topic 或 partition, 则用指定和默认的
+            if topic or partition:
+                if not topic:
+                    topic = os.getenv("KAFKA_TOPIC")
+                if not partition:
+                    task_partition = self.get_hash_partition(task_id)
+                self._produce_with_callback(topic, message, task_id, partition=task_partition)
+            # 如果 topic 和 partition 都没指定, 则用数据库存的
+            else:
+                try:
+                    kafka_dict = current_app.conf.worker_module_kafka
+                except Exception:
+                    # 以防在 conf 里面 拿不到 kafka_dict
+                    p = current_process()
+                    if p._parent_pid:
+                        kafka_dict = json.loads(os.getenv(f"{p._parent_pid}_kafka_dict"))
+                    else:
+                        kafka_dict = json.loads(os.getenv(f"{p.pid}_kafka_dict"))
+                # 遍历在数据库中的所有 topic
+                for topic_in_db, partitions_in_db in kafka_dict.items():
+                    # 如果 partitions 是空列表, 则用 task_id 做哈希值找 partition
+                    if not partitions_in_db:
+                        task_partition = self.get_hash_partition(task_id)
+                        self._produce_with_callback(topic_in_db, message, task_id, partition=task_partition)
+                    else:
+                        # 向每个 partition 都发一份
+                        for p in partitions_in_db:
+                            self._produce_with_callback(topic_in_db, message, task_id, partition=p)
         except Exception as e:
             print(e)
             return None
@@ -364,4 +399,16 @@ sentry = DirectorSentry()
 
 http_session = requests.Session()
 redis_client = RedisClient()
+redis_client.init_redis()
+
 kafka_client = KafkaClient()
+kafka_client.init_kafka({
+        'bootstrap.servers': os.getenv("KAFKA_HOST"),
+        'sasl.username':     os.getenv("KAFKA_USERNAME"),
+        'sasl.password':     os.getenv("KAFKA_PASSWORD"),
+        'acks':              'all',
+        'enable.idempotence': True,
+        "retries": 3,
+        'security.protocol': config.SECURITY_PROTOCOL,
+        'sasl.mechanisms':   config.SASL_MECHANISM,
+})

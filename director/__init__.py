@@ -99,19 +99,6 @@ def create_app(
     cel_workflows.init_app(app)
     sentry.init_app(app)
 
-    # 在这里给当前线程(特别是主线程)初始一个客户端
-    redis_client.init_redis()
-    kafka_client.init_kafka({
-            'bootstrap.servers': os.getenv("KAFKA_HOST"),
-            'sasl.username':     os.getenv("KAFKA_USERNAME"),
-            'sasl.password':     os.getenv("KAFKA_PASSWORD"),
-            'acks':              'all',
-            'enable.idempotence': True,
-            "retries": 3,
-            'security.protocol': config.SECURITY_PROTOCOL,
-            'sasl.mechanisms':   config.SASL_MECHANISM,
-    })
-
     # Dict passed to the cleanup function
     retentions = {}
 
