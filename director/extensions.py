@@ -405,16 +405,4 @@ sentry = DirectorSentry()
 
 http_session = requests.Session()
 redis_client = RedisClient()
-redis_client.init_redis()
-
 kafka_client = KafkaClient()
-kafka_client.init_kafka({
-        'bootstrap.servers': os.getenv("KAFKA_HOST"),
-        'sasl.username':     os.getenv("KAFKA_USERNAME"),
-        'sasl.password':     os.getenv("KAFKA_PASSWORD"),
-        'acks':              'all',
-        'enable.idempotence': True,
-        "retries": 3,
-        'security.protocol': config.SECURITY_PROTOCOL,
-        'sasl.mechanisms':   config.SASL_MECHANISM,
-})
