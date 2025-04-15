@@ -16,6 +16,7 @@ class Kafka(BaseModel):
 
     id = db.Column(UUIDType(binary=False), primary_key=True, nullable=False, default=get_uuid)
     topic = db.Column(db.String(255), nullable=False)
+    backend_type = db.Column(db.String(255), nullable=False, index=True, default="default")
     partitions = db.Column(JSONBType, nullable=False, default=list)  # 默认是空 list
     data = db.Column(JSONBType, nullable=False, default=list)  # 默认是空 list
 
@@ -27,5 +28,6 @@ class Kafka(BaseModel):
             "id": self.id,
             "topic": self.topic,
             "partitions": self.partitions,
+            "backend_type": self.backend_type,
             "data": self.data,
         }

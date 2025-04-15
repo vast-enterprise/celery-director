@@ -345,7 +345,7 @@ class KafkaClient:
         except KafkaException as e:
             raise KafkaException(f"Error while producing message: {str(e)}")
 
-    def produce_message(self, message_dict, task_id, topic=None, partition=None):
+    def produce_message(self, message_dict, task_id, backend_type, topic=None, partition=None):
         message_dict["msg_key"] = str(uuid.uuid4())
         message = json.dumps(message_dict)
         try:
@@ -368,7 +368,9 @@ class KafkaClient:
                     else:
                         kafka_dict = json.loads(os.getenv(f"{p.pid}_kafka_dict"))
                 # 遍历在数据库中的所有 topic
-                for topic_in_db, partitions_in_db in kafka_dict.items():
+                kafka_list = kafka_dict[backend_type]
+                for kafka in kafka_list:
+                    topic_in_db, partitions_in_db = kafka[0], kafka[1]
                     # 如果 partitions 是空列表, 则用 task_id 做哈希值找 partition
                     if not partitions_in_db:
                         task_partition = self.get_hash_partition(task_id)
