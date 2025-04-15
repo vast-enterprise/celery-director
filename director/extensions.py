@@ -405,11 +405,9 @@ sentry = DirectorSentry()
 
 http_session = requests.Session()
 redis_client = RedisClient()
-print("初始化redis开始")
 redis_client.init_redis()
-print("初始化redis结束")
+
 kafka_client = KafkaClient()
-print("初始化kafka开始")
 kafka_client.init_kafka({
         'bootstrap.servers': os.getenv("KAFKA_HOST"),
         'sasl.username':     os.getenv("KAFKA_USERNAME"),
@@ -420,4 +418,3 @@ kafka_client.init_kafka({
         'security.protocol': config.SECURITY_PROTOCOL,
         'sasl.mechanisms':   config.SASL_MECHANISM,
 })
-print("初始化kafka结束")
