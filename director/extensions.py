@@ -295,16 +295,24 @@ class RedisClient:
 # Kafka Extension
 class KafkaClient:
     def __init__(self):
-        self.producer = None
+        self.producer_dict = {}
+
+    @property
+    def producer(self):
+        p = current_process()
+        return self.producer_dict[p.pid]
 
     def init_kafka(self, kafka_configs):
-        self.producer = confluent_kafka.Producer(kafka_configs)
-        metadata = self.producer.list_topics(timeout=10)
-        # 在初始化时去拿 partition 数量
-        try:
-            self.num_partitions = len(metadata.topics[os.getenv("KAFKA_TOPIC")].partitions)
-        except Exception:
-            self.num_partitions = 6
+        p = current_process()
+        if p.pid not in self.producer_dict:
+            try:
+                self.producer_dict[p.pid] = confluent_kafka.Producer(kafka_configs)
+                # 在初始化时去拿 partition 数量
+                # TODO 如果从数据库读取 topic, 是否在这时拿 partitions
+                metadata = self.producer.list_topics(timeout=10)
+                self.num_partitions = len(metadata.topics[os.getenv("KAFKA_TOPIC")].partitions)
+            except Exception:
+                self.num_partitions = 6
 
     def get_hash_partition(self, task_id):
         hash_object = hashlib.sha256(task_id.encode())
@@ -397,9 +405,11 @@ sentry = DirectorSentry()
 
 http_session = requests.Session()
 redis_client = RedisClient()
+print("初始化redis开始")
 redis_client.init_redis()
-
+print("初始化redis结束")
 kafka_client = KafkaClient()
+print("初始化kafka开始")
 kafka_client.init_kafka({
         'bootstrap.servers': os.getenv("KAFKA_HOST"),
         'sasl.username':     os.getenv("KAFKA_USERNAME"),
@@ -410,3 +420,4 @@ kafka_client.init_kafka({
         'security.protocol': config.SECURITY_PROTOCOL,
         'sasl.mechanisms':   config.SASL_MECHANISM,
 })
+print("初始化kafka结束")
