@@ -296,28 +296,50 @@ class RedisClient:
 class KafkaClient:
     def __init__(self):
         self.producer_dict = {}
+        self.partition_dict = {}
 
-    @property
-    def producer(self):
+    def get_num_partitions(self, topic, backend_type):
         p = current_process()
-        return self.producer_dict[p.pid]
+        return self.partition_dict[p.pid][backend_type][topic]
 
-    def init_kafka(self, kafka_configs):
+    def get_producer(self, backend_type):
+        p = current_process()
+        return self.producer_dict[p.pid][backend_type]
+
+    def get_kafka_dict(self):
+        try:
+            kafka_dict = current_app.conf.worker_module_kafka
+            return kafka_dict
+        except Exception:
+            # 以防在 conf 里面 拿不到 kafka_dict
+            p = current_process()
+            if p._parent_pid:
+                kafka_dict = json.loads(os.getenv(f"{p._parent_pid}_kafka_dict"))
+            else:
+                kafka_dict = json.loads(os.getenv(f"{p.pid}_kafka_dict"))
+            return kafka_dict
+
+    def init_kafka(self, kafka_configs=None):
         p = current_process()
         if p.pid not in self.producer_dict:
-            try:
-                self.producer_dict[p.pid] = confluent_kafka.Producer(kafka_configs)
+            self.producer_dict[p.pid] = {}
+            self.partition_dict[p.pid] = {}
+            kafka_dict = self.get_kafka_dict()
+            for backend_type, (topic_list, _, conn_config) in kafka_dict.items():
+                print(f"这时候的 producer: {p.pid}|{backend_type}")
+                self.producer_dict[p.pid][backend_type] = confluent_kafka.Producer(conn_config)
+                metadata = self.producer_dict[p.pid][backend_type].list_topics(timeout=10)
+                self.partition_dict[p.pid][backend_type] = {}
                 # 在初始化时去拿 partition 数量
-                # TODO 如果从数据库读取 topic, 是否在这时拿 partitions
-                metadata = self.producer.list_topics(timeout=10)
-                self.num_partitions = len(metadata.topics[os.getenv("KAFKA_TOPIC")].partitions)
-            except Exception:
-                self.num_partitions = 6
+                for topic in topic_list:
+                    num_partitions = len(metadata.topics[topic].partitions)
+                    print(f"这时候的 num_partitions: {p.pid}|{backend_type}|{topic}|{num_partitions}")
+                    self.partition_dict[p.pid][backend_type][topic] = num_partitions
 
-    def get_hash_partition(self, task_id):
+    def get_hash_partition(self, task_id, topic, backend_type):
         hash_object = hashlib.sha256(task_id.encode())
         hash_digest = int(hash_object.hexdigest(), 16)
-        return hash_digest % self.num_partitions
+        return hash_digest % self.get_num_partitions(topic, backend_type)
 
     def _decompose_msg(self, msg):
         return {
@@ -327,7 +349,7 @@ class KafkaClient:
             "offset": msg.offset(),
         }
 
-    def _produce_with_callback(self, topic, value, key, partition=None, callback=None):
+    def _produce_with_callback(self, topic, value, key, backend_type, partition=None, callback=None):
         def ack(err, msg):
             # if err is not None:
             #     print('Message delivery failed: {}'.format(err))
@@ -338,53 +360,40 @@ class KafkaClient:
                 callback(err, msg)
         try:
             if partition:
-                self.producer.produce(topic=topic, value=value, key=key, on_delivery=ack, partition=partition)
+                self.get_producer(backend_type).produce(topic=topic, value=value, key=key, on_delivery=ack, partition=partition)
             else:
-                self.producer.produce(topic=topic, value=value, key=key, on_delivery=ack)
-            self.producer.flush()
+                self.get_producer(backend_type).produce(topic=topic, value=value, key=key, on_delivery=ack)
+            self.get_producer(backend_type).flush()
         except KafkaException as e:
             raise KafkaException(f"Error while producing message: {str(e)}")
 
     def produce_message(self, message_dict, task_id, backend_type, topic=None, partition=None):
         message_dict["msg_key"] = str(uuid.uuid4())
         message = json.dumps(message_dict)
+        kafka_dict = self.get_kafka_dict()
         try:
-            # 如果指定了 topic 或 partition, 则用指定和默认的
-            if topic or partition:
-                if not topic:
-                    topic = os.getenv("KAFKA_TOPIC")
-                if not partition:
-                    task_partition = self.get_hash_partition(task_id)
-                self._produce_with_callback(topic, message, task_id, partition=task_partition)
-            # 如果 topic 和 partition 都没指定, 则用数据库存的
-            else:
-                try:
-                    kafka_dict = current_app.conf.worker_module_kafka
-                except Exception:
-                    # 以防在 conf 里面 拿不到 kafka_dict
-                    p = current_process()
-                    if p._parent_pid:
-                        kafka_dict = json.loads(os.getenv(f"{p._parent_pid}_kafka_dict"))
-                    else:
-                        kafka_dict = json.loads(os.getenv(f"{p.pid}_kafka_dict"))
-                # 遍历在数据库中的所有 topic
-                kafka_list = kafka_dict[backend_type]
-                for kafka in kafka_list:
-                    topic_in_db, partitions_in_db = kafka[0], kafka[1]
-                    # 如果 partitions 是空列表, 则用 task_id 做哈希值找 partition
-                    if not partitions_in_db:
-                        task_partition = self.get_hash_partition(task_id)
-                        self._produce_with_callback(topic_in_db, message, task_id, partition=task_partition)
-                    else:
-                        # 向每个 partition 都发一份
-                        for p in partitions_in_db:
-                            self._produce_with_callback(topic_in_db, message, task_id, partition=p)
+            # 遍历在数据库中的所有 topic
+            (topic_list, partition_dict, _) = kafka_dict[backend_type]
+            for topic_in_db in topic_list:
+                # 如果当前 topic 没指定 partition, 就用 task_id 分配
+                if topic_in_db not in partition_dict or not partition_dict[topic_in_db]:
+                    task_partition = self.get_hash_partition(task_id, topic_in_db, backend_type)
+                    print(f"没指定 {backend_type}|{topic_list}|{topic_in_db}|{task_partition}")
+                    self._produce_with_callback(topic_in_db, message, task_id, backend_type, partition=task_partition)
+                else:
+                    # 向每个指定的 partition 都发一份
+                    partition_list = partition_dict[topic_in_db]
+                    print(f"指定 {backend_type}|{topic_list}|{topic_in_db}|{partition_list}")
+                    for p in partition_list:
+                        self._produce_with_callback(topic_in_db, message, task_id, backend_type, partition=p)
         except Exception as e:
             print(e)
             return None
 
     def close(self):
-        self.producer.flush()
+        p = current_process()
+        for _, conn in self.producer_dict[p.pid].items():
+            conn.flush()
 
 
 # List of extensions
