@@ -1,5 +1,3 @@
-import os, sys
-from pathlib import Path
 from distutils.util import strtobool
 from flask import abort, jsonify, request
 from flask import current_app as app
@@ -11,9 +9,6 @@ from director.exceptions import WorkflowNotFound
 from director.extensions import cel_workflows, schema
 from director.models.workflows import Workflow
 
-config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
-sys.path.append(f"{config_path.parent.resolve()}/")
-import config
 
 def _get_workflow(workflow_id):
     workflow = Workflow.query.filter_by(id=workflow_id).first()

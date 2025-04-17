@@ -326,14 +326,12 @@ class KafkaClient:
             self.partition_dict[p.pid] = {}
             kafka_dict = self.get_kafka_dict()
             for backend_type, (topic_list, _, conn_config) in kafka_dict.items():
-                print(f"这时候的 producer: {p.pid}|{backend_type}")
                 self.producer_dict[p.pid][backend_type] = confluent_kafka.Producer(conn_config)
                 metadata = self.producer_dict[p.pid][backend_type].list_topics(timeout=10)
                 self.partition_dict[p.pid][backend_type] = {}
                 # 在初始化时去拿 partition 数量
                 for topic in topic_list:
                     num_partitions = len(metadata.topics[topic].partitions)
-                    print(f"这时候的 num_partitions: {p.pid}|{backend_type}|{topic}|{num_partitions}")
                     self.partition_dict[p.pid][backend_type][topic] = num_partitions
 
     def get_hash_partition(self, task_id, topic, backend_type):
@@ -378,12 +376,10 @@ class KafkaClient:
                 # 如果当前 topic 没指定 partition, 就用 task_id 分配
                 if topic_in_db not in partition_dict or not partition_dict[topic_in_db]:
                     task_partition = self.get_hash_partition(task_id, topic_in_db, backend_type)
-                    print(f"没指定 {backend_type}|{topic_list}|{topic_in_db}|{task_partition}")
                     self._produce_with_callback(topic_in_db, message, task_id, backend_type, partition=task_partition)
                 else:
                     # 向每个指定的 partition 都发一份
                     partition_list = partition_dict[topic_in_db]
-                    print(f"指定 {backend_type}|{topic_list}|{topic_in_db}|{partition_list}")
                     for p in partition_list:
                         self._produce_with_callback(topic_in_db, message, task_id, backend_type, partition=p)
         except Exception as e:
