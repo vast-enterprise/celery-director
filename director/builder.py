@@ -113,11 +113,12 @@ class WorkflowBuilder(object):
 
 
     def parse_wf(self, tasks, queues, conditions, priority, periodic, is_hook=False):
-        full_canvas = self.parse_recursive(tasks, None, None, queues, conditions, priority, is_hook, periodic)
+        container = []
+        full_canvas = self.parse_recursive(tasks, None, None, queues, conditions, priority, is_hook, periodic, container)
         return full_canvas
 
 
-    def parse_recursive(self, tasks, parent_type, parent, queues, conditions, priority, is_hook, periodic):
+    def parse_recursive(self, tasks, parent_type, parent, queues, conditions, priority, is_hook, periodic, container):
         previous = []
         if parent != None:
             if isinstance(parent.phase, group): 
@@ -134,6 +135,8 @@ class WorkflowBuilder(object):
                     previous = canvas_phase[-1].previous
 
                 task_name, is_skipped = task, False
+                index = len(container)
+                container.append(task_name)
                 # 如果是有条件的
                 if type(task) is dict:
                     (task_name, condition_key), = task.items()
@@ -143,7 +146,7 @@ class WorkflowBuilder(object):
                     assigned_queue = None
                     if not periodic:
                         try:
-                            assigned_queue = queues[task_name]
+                            assigned_queue = queues[f"{index}-{task_name}"]
                         except Exception as e:
                             raise WorkflowSyntaxError("Every task should have an assigned queue")
                     signature = self.new_task(task_name, previous, is_hook, priority, assigned_queue, periodic)
@@ -156,7 +159,7 @@ class WorkflowBuilder(object):
                     current = canvas_phase[-1]
                 else:
                     current = parent
-                group_canvas_phase = self.parse_recursive(group_task, task_type, current, queues, conditions, priority, is_hook, periodic)
+                group_canvas_phase = self.parse_recursive(group_task, task_type, current, queues, conditions, priority, is_hook, periodic, container)
                 if group_canvas_phase:
                     canvas_phase.append(group_canvas_phase)
 
