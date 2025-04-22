@@ -136,7 +136,11 @@ class WorkflowBuilder(object):
                 task_name, is_skipped = task, False
                 # 如果是有条件的
                 if type(task) is dict:
-                    (task_name, condition_key), = task.items()
+                    (task_name, task_config), = task.items()
+                    if isinstance(task_config, dict):
+                        condition_key = task_config["condition"]
+                    else:
+                        condition_key = task_config
                     is_skipped = condition_key in conditions and not conditions[condition_key]
                 if not is_skipped:
                     # 如果 queues 非空则用 payload 中的 queues
