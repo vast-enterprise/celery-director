@@ -1,6 +1,7 @@
 import sys, os
 from pathlib import Path
 from celery import chain, group
+from celery.canvas import _chain
 from celery.utils import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -121,7 +122,12 @@ class WorkflowBuilder(object):
         previous = []
         if parent != None:
             if isinstance(parent.phase, group): 
-                previous = [task.id for task in parent.phase.tasks]
+                for task in parent.phase.tasks:
+                    if isinstance(task, _chain):
+                        for t in task["kwargs"]["tasks"]:
+                            previous.append(t.id)
+                    else:
+                        previous.append(task.id)
             else:
                 previous = parent.phase.id 
         canvas_phase = []
