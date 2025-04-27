@@ -1,13 +1,14 @@
-import imp
 import sys
 import yaml
-import socket
+import hashlib
 import importlib
 import sentry_sdk
 from pathlib import Path
 import os, uuid, requests, json
 from json.decoder import JSONDecodeError
 from celery import Celery
+from celery import current_app
+from billiard.process import current_process
 from celery.exceptions import SoftTimeLimitExceeded
 from flask_migrate import Migrate
 from flask_json_schema import JsonSchema
@@ -23,12 +24,11 @@ from redis.retry import Retry as RetrySync
 from redis.backoff import ExponentialBackoff
 from redis.exceptions import ConnectionError, TimeoutError, BusyLoadingError
 
-from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound, WorkflowSyntaxError
+from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound
 config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
 sys.path.append(f"{config_path.parent.resolve()}/")
 import config
 from workers.worker_loader import SubmoduleWorkerLoader
-from workers import worker_config
 
 
 def validate_tasks(task_definition, tasks_config):
@@ -294,16 +294,49 @@ class RedisClient:
 # Kafka Extension
 class KafkaClient:
     def __init__(self):
-        self.producer = None
+        self.producer_dict = {}
+        self.partition_dict = {}
 
-    def init_kafka(self, kafka_configs):
-        self.producer = confluent_kafka.Producer(kafka_configs)
-        metadata = self.producer.list_topics(timeout=10)
-        # 在初始化时去拿 partition 数量
+    def get_num_partitions(self, topic, backend_type):
+        p = current_process()
+        return self.partition_dict[p.pid][backend_type][topic]
+
+    def get_producer(self, backend_type):
+        p = current_process()
+        return self.producer_dict[p.pid][backend_type]
+
+    def get_kafka_dict(self):
         try:
-            self.num_partitions = len(metadata.topics[os.getenv("KAFKA_TOPIC")].partitions)
+            kafka_dict = current_app.conf.worker_module_kafka
+            return kafka_dict
         except Exception:
-            self.num_partitions = 6
+            # 以防在 conf 里面 拿不到 kafka_dict
+            p = current_process()
+            if p._parent_pid:
+                kafka_dict = json.loads(os.getenv(f"{p._parent_pid}_kafka_dict"))
+            else:
+                kafka_dict = json.loads(os.getenv(f"{p.pid}_kafka_dict"))
+            return kafka_dict
+
+    def init_kafka(self, kafka_configs=None):
+        p = current_process()
+        if p.pid not in self.producer_dict:
+            self.producer_dict[p.pid] = {}
+            self.partition_dict[p.pid] = {}
+            kafka_dict = self.get_kafka_dict()
+            for backend_type, (topic_list, _, conn_config) in kafka_dict.items():
+                self.producer_dict[p.pid][backend_type] = confluent_kafka.Producer(conn_config)
+                metadata = self.producer_dict[p.pid][backend_type].list_topics(timeout=10)
+                self.partition_dict[p.pid][backend_type] = {}
+                # 在初始化时去拿 partition 数量
+                for topic in topic_list:
+                    num_partitions = len(metadata.topics[topic].partitions)
+                    self.partition_dict[p.pid][backend_type][topic] = num_partitions
+
+    def get_hash_partition(self, task_id, topic, backend_type):
+        hash_object = hashlib.sha256(task_id.encode())
+        hash_digest = int(hash_object.hexdigest(), 16)
+        return hash_digest % self.get_num_partitions(topic, backend_type)
 
     def _decompose_msg(self, msg):
         return {
@@ -313,7 +346,7 @@ class KafkaClient:
             "offset": msg.offset(),
         }
 
-    def _produce_with_callback(self, topic, value, key, partition=None, callback=None):
+    def _produce_with_callback(self, topic, value, key, backend_type, partition=None, callback=None):
         def ack(err, msg):
             # if err is not None:
             #     print('Message delivery failed: {}'.format(err))
@@ -324,24 +357,38 @@ class KafkaClient:
                 callback(err, msg)
         try:
             if partition:
-                self.producer.produce(topic=topic, value=value, key=key, on_delivery=ack, partition=partition)
+                self.get_producer(backend_type).produce(topic=topic, value=value, key=key, on_delivery=ack, partition=partition)
             else:
-                self.producer.produce(topic=topic, value=value, key=key, on_delivery=ack)
-            self.producer.flush()
+                self.get_producer(backend_type).produce(topic=topic, value=value, key=key, on_delivery=ack)
+            self.get_producer(backend_type).flush()
         except KafkaException as e:
             raise KafkaException(f"Error while producing message: {str(e)}")
 
-    def produce_message(self, topic, message_dict, task_id, partition=None):
+    def produce_message(self, message_dict, task_id, backend_type, topic=None, partition=None):
+        message_dict["msg_key"] = str(uuid.uuid4())
+        message = json.dumps(message_dict)
+        kafka_dict = self.get_kafka_dict()
         try:
-            message_dict["msg_key"] = str(uuid.uuid4())
-            message = json.dumps(message_dict)
-            self._produce_with_callback(topic, message, task_id, partition)
+            # 遍历在数据库中的所有 topic
+            (topic_list, partition_dict, _) = kafka_dict[backend_type]
+            for topic_in_db in topic_list:
+                # 如果当前 topic 没指定 partition, 就用 task_id 分配
+                if topic_in_db not in partition_dict or not partition_dict[topic_in_db]:
+                    task_partition = self.get_hash_partition(task_id, topic_in_db, backend_type)
+                    self._produce_with_callback(topic_in_db, message, task_id, backend_type, partition=task_partition)
+                else:
+                    # 向每个指定的 partition 都发一份
+                    partition_list = partition_dict[topic_in_db]
+                    for p in partition_list:
+                        self._produce_with_callback(topic_in_db, message, task_id, backend_type, partition=p)
         except Exception as e:
             print(e)
             return None
 
     def close(self):
-        self.producer.flush()
+        p = current_process()
+        for _, conn in self.producer_dict[p.pid].items():
+            conn.flush()
 
 
 # List of extensions
@@ -364,16 +411,4 @@ sentry = DirectorSentry()
 
 http_session = requests.Session()
 redis_client = RedisClient()
-redis_client.init_redis()
-
 kafka_client = KafkaClient()
-kafka_client.init_kafka({
-        'bootstrap.servers': os.getenv("KAFKA_HOST"),
-        'sasl.username':     os.getenv("KAFKA_USERNAME"),
-        'sasl.password':     os.getenv("KAFKA_PASSWORD"),
-        'acks':              'all',
-        'enable.idempotence': True,
-        "retries": 3,
-        'security.protocol': config.SECURITY_PROTOCOL,
-        'sasl.mechanisms':   config.SASL_MECHANISM,
-})
