@@ -138,7 +138,7 @@ class WorkflowBuilder(object):
                 if type(task) is dict:
                     (task_name, task_config), = task.items()
                     if isinstance(task_config, dict):
-                        condition_key = task_config["condition"]
+                        condition_key = task_config.get("condition", "")
                     else:
                         condition_key = task_config
                     is_skipped = condition_key in conditions and not conditions[condition_key]
