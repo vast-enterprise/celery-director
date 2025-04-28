@@ -119,15 +119,36 @@ class WorkflowBuilder(object):
 
 
     def parse_recursive(self, tasks, parent_type, parent, queues, conditions, priority, is_hook, periodic):
+        def get_previous(all_tasks, previous_list):
+            if isinstance(all_tasks, group):
+                for task in all_tasks.tasks:
+                    if isinstance(task, _chain):
+                        tasks_in_chain = task["kwargs"]["tasks"]
+                        if tasks_in_chain:
+                            last_task_in_chain = tasks_in_chain[-1]
+                            if isinstance(last_task_in_chain, _chain) or isinstance(last_task_in_chain, group):
+                                get_previous(last_task_in_chain, previous_list)
+                            else:
+                                previous_list.append(last_task_in_chain.id)
+                    elif isinstance(task, group):
+                        get_previous(task, previous_list)
+                    else:
+                        previous_list.append(task.id)
+            elif isinstance(all_tasks, _chain):
+                tasks_in_chain = all_tasks["kwargs"]["tasks"]
+                if tasks_in_chain:
+                    last_task_in_chain = tasks_in_chain[-1]
+                    if isinstance(last_task_in_chain, _chain) or isinstance(last_task_in_chain, group):
+                        get_previous(last_task_in_chain, previous_list)
+                    else:
+                        previous_list.append(last_task_in_chain.id)
+            else:
+                previous_list.append(all_tasks.id)
+
         previous = []
         if parent != None:
             if isinstance(parent.phase, group): 
-                for task in parent.phase.tasks:
-                    if isinstance(task, _chain):
-                        last_task_in_chain = task["kwargs"]["tasks"][-1]
-                        previous.append(last_task_in_chain.id)
-                    else:
-                        previous.append(task.id)
+                get_previous(parent.phase, previous)
             else:
                 previous = parent.phase.id 
         canvas_phase = []
