@@ -124,8 +124,8 @@ class WorkflowBuilder(object):
             if isinstance(parent.phase, group): 
                 for task in parent.phase.tasks:
                     if isinstance(task, _chain):
-                        for t in task["kwargs"]["tasks"]:
-                            previous.append(t.id)
+                        last_task_in_chain = task["kwargs"]["tasks"][-1]
+                        previous.append(last_task_in_chain.id)
                     else:
                         previous.append(task.id)
             else:
