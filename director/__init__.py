@@ -39,7 +39,7 @@ task = partial(cel.task, base=BaseTask)
 
 
 # Provide the user config
-config = UserConfig()
+_config = UserConfig()
 
 
 # Custom Flask class
@@ -64,7 +64,7 @@ def create_app(
     app.config.from_object(c)
 
     # Init User's config
-    config.init()
+    _config.init()
 
     # Init Blueprints
     app.register_blueprint(api_bp)

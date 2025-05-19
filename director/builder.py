@@ -1,6 +1,7 @@
 import sys, os
 from pathlib import Path
 from celery import chain, group
+from celery.canvas import _chain
 from celery.utils import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -118,10 +119,36 @@ class WorkflowBuilder(object):
 
 
     def parse_recursive(self, tasks, parent_type, parent, queues, conditions, priority, is_hook, periodic):
+        def get_previous(all_tasks, previous_list):
+            if isinstance(all_tasks, group):
+                for task in all_tasks.tasks:
+                    if isinstance(task, _chain):
+                        tasks_in_chain = task["kwargs"]["tasks"]
+                        if tasks_in_chain:
+                            last_task_in_chain = tasks_in_chain[-1]
+                            if isinstance(last_task_in_chain, _chain) or isinstance(last_task_in_chain, group):
+                                get_previous(last_task_in_chain, previous_list)
+                            else:
+                                previous_list.append(last_task_in_chain.id)
+                    elif isinstance(task, group):
+                        get_previous(task, previous_list)
+                    else:
+                        previous_list.append(task.id)
+            elif isinstance(all_tasks, _chain):
+                tasks_in_chain = all_tasks["kwargs"]["tasks"]
+                if tasks_in_chain:
+                    last_task_in_chain = tasks_in_chain[-1]
+                    if isinstance(last_task_in_chain, _chain) or isinstance(last_task_in_chain, group):
+                        get_previous(last_task_in_chain, previous_list)
+                    else:
+                        previous_list.append(last_task_in_chain.id)
+            else:
+                previous_list.append(all_tasks.id)
+
         previous = []
         if parent != None:
             if isinstance(parent.phase, group): 
-                previous = [task.id for task in parent.phase.tasks]
+                get_previous(parent.phase, previous)
             else:
                 previous = parent.phase.id 
         canvas_phase = []
@@ -136,7 +163,11 @@ class WorkflowBuilder(object):
                 task_name, is_skipped = task, False
                 # 如果是有条件的
                 if type(task) is dict:
-                    (task_name, condition_key), = task.items()
+                    (task_name, task_config), = task.items()
+                    if isinstance(task_config, dict):
+                        condition_key = task_config.get("condition", "")
+                    else:
+                        condition_key = task_config
                     is_skipped = condition_key in conditions and not conditions[condition_key]
                 if not is_skipped:
                     # 如果 queues 非空则用 payload 中的 queues
