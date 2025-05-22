@@ -149,9 +149,9 @@ def list_workflows():
         "per_page", type=int, default=app.config["WORKFLOWS_PER_PAGE"]
     )
 
-    workflows = Workflow.query.filter(
-        Workflow.periodic.is_(False)  # 筛选 periodic 为 False
-    ).order_by(Workflow.created_at.desc()).paginate(
+    workflows = Workflow.query.order_by(
+        Workflow.created_at.desc()
+    ).paginate(
         page=page, per_page=per_page
     )
 
