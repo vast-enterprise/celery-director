@@ -33,7 +33,8 @@ class BaseModel(db.Model):
             db.session.rollback()
             raise
         finally:
-            db.session.close()  # 一定要加这步！
+            # 暂时加上 close
+            db.session.close()
 
     def save(self):
         db.session.add(self)
