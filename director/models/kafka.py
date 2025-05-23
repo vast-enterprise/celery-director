@@ -26,6 +26,12 @@ class Kafka(BaseModel):
 
 
 def get_kafka_dict():
-    ret = db.session.execute(db.select(Kafka)).scalars()
-    db.session.commit()  # Properly shutdown the session
-    return {kafka.backend_type: kafka.to_dict() for kafka in ret}
+    session = db.session
+    try:
+        ret = session.query(Kafka).all()
+        return ret
+    except Exception as e:
+        session.rollback()
+        raise e
+    finally:
+        session.remove()
