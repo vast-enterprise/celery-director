@@ -32,6 +32,8 @@ class BaseModel(db.Model):
         except Exception:
             db.session.rollback()
             raise
+        finally:
+            db.session.close()  # 一定要加这步！
 
     def save(self):
         db.session.add(self)
