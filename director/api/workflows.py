@@ -39,7 +39,7 @@ async def _execute_workflow(db_session, model_version, task_name, payload={}, co
     await db_session.refresh(obj)
 
     # Build the workflow and execute it
-    workflow = WorkflowBuilder(obj.id, obj)
+    workflow = WorkflowBuilder(workflow_id=obj.id, wf=obj)
     conditions = payload["conditions"]
     queues = payload["queues"]
     workflow.run(queues, mapped_priority, conditions)
@@ -66,7 +66,7 @@ def _execute_workflow_relaunch(model_version, task_name, payload={}, comment=Non
     obj.save()
 
     # Build the workflow and execute it
-    workflow = WorkflowBuilder(obj.id)
+    workflow = WorkflowBuilder(workflow_id=obj.id, wf=obj)
     conditions = payload["conditions"]
     queues = payload["queues"]
     workflow.run(queues, mapped_priority, conditions)
@@ -76,7 +76,7 @@ def _execute_workflow_relaunch(model_version, task_name, payload={}, comment=Non
 
 
 def _cancel_workflow(obj):
-    workflow = WorkflowBuilder(obj.id)
+    workflow = WorkflowBuilder(workflow_id=obj.id, wf=obj)
     workflow.cancel()
 
     app.logger.info(f"Workflow {obj.id} canceled")
