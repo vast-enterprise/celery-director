@@ -35,9 +35,10 @@ async def _execute_workflow(db_session, model_version, task_name, payload={}, co
     # Create the workflow in DB
     print("创建 Workflow...")
     obj = Workflow(id=task_id, tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
-    db_session.add(obj)
-    await db_session.commit()
-    await db_session.refresh(obj)
+    # db_session.add(obj)
+    # await db_session.commit()
+    # await db_session.refresh(obj)
+    obj.save()
     print(f"创建 Workflow 成功 {obj.to_dict()}")
 
     # Build the workflow and execute it
