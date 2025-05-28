@@ -33,16 +33,20 @@ async def _execute_workflow(db_session, model_version, task_name, payload={}, co
     task_id = payload["data"]["task_id"]
     mapped_priority = payload["mapped_priority"]
     # Create the workflow in DB
+    print("创建 Workflow...")
     obj = Workflow(id=task_id, tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
     db_session.add(obj)
     await db_session.commit()
     await db_session.refresh(obj)
+    print(f"创建 Workflow 成功 {obj.to_dict()}")
 
     # Build the workflow and execute it
-    workflow = WorkflowBuilder(obj.id, obj)
+    workflow = WorkflowBuilder(task_id, obj)
     conditions = payload["conditions"]
     queues = payload["queues"]
+    print(f"创建 WorkflowBuilder 成功: {workflow}")
     workflow.run(queues, mapped_priority, conditions)
+    print(f"运行 Workflow 成功")
 
     app.logger.info(f"Workflow sent : {workflow.canvas}")
     return obj.to_dict(), workflow
@@ -66,7 +70,7 @@ def _execute_workflow_relaunch(model_version, task_name, payload={}, comment=Non
     obj.save()
 
     # Build the workflow and execute it
-    workflow = WorkflowBuilder(obj.id)
+    workflow = WorkflowBuilder(task_id)
     conditions = payload["conditions"]
     queues = payload["queues"]
     workflow.run(queues, mapped_priority, conditions)

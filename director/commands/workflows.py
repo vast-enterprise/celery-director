@@ -156,7 +156,7 @@ def run_workflow(ctx, fullname, payload, comment):
 
     # Build the canvas and execute it
     # 用 obj.id 主要是怕未来如果有任务重试，用 task_id 做主键会有重复
-    _workflow = WorkflowBuilder(obj.id)
+    _workflow = WorkflowBuilder(task_id)
 
     # conditions 是一个字典, 里面决定某些子任务是否执行
     # 如果是空字典  则所有子任务都执行
