@@ -88,6 +88,7 @@ class Config(object):
             "timezone": "Asia/Shanghai",
             "task_acks_late": True,
             "reject_on_worker_lost": True,
+            "result_persistent": False,
         }
 
         # Sentry configuration
