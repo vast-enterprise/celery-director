@@ -280,7 +280,7 @@ class WorkflowBuilder(object):
         status_to_cancel = set([StatusType.pending, StatusType.progress])
         for task in self.workflow.tasks:
             if task.status in status_to_cancel:
-                cel.control.revoke(str(task.id), terminate=True)
+                cel.control.revoke(str(task.id))
                 task.status = StatusType.canceled
                 task.save()
         self.workflow.status = StatusType.canceled
