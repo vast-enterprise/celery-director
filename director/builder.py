@@ -84,7 +84,7 @@ class WorkflowBuilder(object):
                     "payload": self.workflow.payload},
             queue=assigned_queue,
             task_id=task_id,
-            expires=datetime.now(timezone.utc) + timedelta(seconds=20)
+            expires=datetime.now(timezone.utc) + timedelta(hours=1)
         )
         signature.set(priority=priority)
         
