@@ -64,7 +64,7 @@ def _execute_workflow_relaunch(model_version, task_name, payload={}, comment=Non
     obj.save()
 
     # Build the workflow and execute it
-    workflow = WorkflowBuilder(task_id)
+    workflow = WorkflowBuilder(task_id, obj)
     conditions = payload["conditions"]
     queues = payload["queues"]
     workflow.run(queues, mapped_priority, conditions)
@@ -74,7 +74,7 @@ def _execute_workflow_relaunch(model_version, task_name, payload={}, comment=Non
 
 
 def _cancel_workflow(obj):
-    workflow = WorkflowBuilder(obj.id)
+    workflow = WorkflowBuilder(obj.id, obj)
     workflow.cancel()
 
     app.logger.info(f"Workflow {obj.id} canceled")
