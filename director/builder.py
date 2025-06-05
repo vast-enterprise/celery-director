@@ -84,13 +84,12 @@ class WorkflowBuilder(object):
                     "payload": self.workflow.payload},
             queue=assigned_queue,
             task_id=task_id,
-            expires=datetime.now(timezone.utc) + timedelta(hours=1)
+            expires=datetime.now(timezone.utc) + timedelta(seconds=20)
         )
         signature.set(priority=priority)
         
         if type(previous) != list:
             previous = [previous]
-        print(f"建立新task {task_name}, {self.workflow.id}")
         # Director task has the same UID
         task = Task(
             id=task_id,
@@ -101,7 +100,6 @@ class WorkflowBuilder(object):
             is_hook=is_hook,
         )
         task.save()
-        print("task 保存成功")
         return signature
 
 
