@@ -59,6 +59,12 @@ def _execute_workflow_relaunch(model_version, task_name, payload={}, comment=Non
 
     task_id = payload["data"]["task_id"]
     mapped_priority = payload["mapped_priority"]
+
+    # Delete existing workflow with same task_id if it exists
+    existing_workflow = Workflow.query.filter_by(id=task_id).first()
+    if existing_workflow:
+        existing_workflow.delete()
+
     # Create the workflow in DB
     obj = Workflow(id=task_id, tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
     obj.save()
