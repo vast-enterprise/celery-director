@@ -33,7 +33,14 @@ async def _execute_workflow(model_version, task_name, payload={}, comment=None):
     task_id = payload["data"]["task_id"]
     mapped_priority = payload["mapped_priority"]
     # Create the workflow in DB
-    obj = Workflow(id=task_id, tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
+    obj = Workflow(
+        id=task_id,
+        tripo_task_id=task_id,
+        model_version=model_version,
+        task_name=task_name,
+        payload=payload,
+        comment=comment,
+    )
     obj.save()
 
     # Build the workflow and execute it
@@ -60,7 +67,14 @@ def _execute_workflow_relaunch(model_version, task_name, payload={}, comment=Non
     task_id = payload["data"]["task_id"]
     mapped_priority = payload["mapped_priority"]
     # Create the workflow in DB
-    obj = Workflow(id=task_id, tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
+    obj = Workflow(
+        id=task_id,
+        tripo_task_id=task_id,
+        model_version=model_version,
+        task_name=task_name,
+        payload=payload,
+        comment=comment,
+    )
     obj.save()
 
     # Build the workflow and execute it
@@ -117,7 +131,9 @@ def relaunch_workflow(workflow_id):
     obj = _get_workflow(workflow_id)
     if hasattr(obj, "comment"):
         comment = obj.comment
-    data, _ = _execute_workflow_relaunch(obj.model_version, obj.task_name, obj.payload, comment)
+    data, _ = _execute_workflow_relaunch(
+        obj.model_version, obj.task_name, obj.payload, comment
+    )
     return jsonify(data), 201
 
 
@@ -147,16 +163,12 @@ def list_workflows():
         "per_page", type=int, default=app.config["WORKFLOWS_PER_PAGE"]
     )
 
-    workflows = Workflow.query.order_by(
-        Workflow.created_at.desc()
-    ).paginate(
+    workflows = Workflow.query.order_by(Workflow.created_at.desc()).paginate(
         page=page, per_page=per_page
     )
 
     # 不返回周期任务
-    return jsonify([
-        w.to_dict(with_payload=with_payload) for w in workflows.items
-    ])
+    return jsonify([w.to_dict(with_payload=with_payload) for w in workflows.items])
 
 
 @api_bp.route("/workflows/<workflow_id>")

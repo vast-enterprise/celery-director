@@ -25,6 +25,7 @@ from redis.backoff import ExponentialBackoff
 from redis.exceptions import ConnectionError, TimeoutError, BusyLoadingError
 
 from director.exceptions import SchemaNotFound, SchemaNotValid, WorkflowNotFound
+
 config_path = Path(os.getenv("DIRECTOR_CONFIG")).resolve()
 sys.path.append(f"{config_path.parent.resolve()}/")
 import config
@@ -47,11 +48,11 @@ def validate_tasks(task_definition, tasks_config):
                 # raise WorkflowSyntaxError(f"task '{task}' is not found in {config.TASKS_CONFIG_PATH}")
         elif isinstance(task, list):
             validate_tasks(task, tasks_config)
-        else: # dict
-            (task_name, value), = task.items() 
+        else:  # dict
+            ((task_name, value),) = task.items()
             if task_name == "GROUP":
                 validate_tasks(value, tasks_config)
-            else: # 有条件的任务
+            else:  # 有条件的任务
                 if task_name not in tasks_config:
                     pass
                     # raise WorkflowSyntaxError(f"task '{task_name}' is not found in {config.TASKS_CONFIG_PATH}")
@@ -64,7 +65,7 @@ def format_yaml(yaml_data):
         # 如果是 periodic 下层是任务 list
         if isinstance(val, list):
             for task in val:
-                (sub_task_name, tasks), = task.items() 
+                ((sub_task_name, tasks),) = task.items()
                 validate_tasks(tasks, tasks_config)
                 formatted_yaml[f"{task_name}:{sub_task_name}"] = tasks
         else:
@@ -102,7 +103,7 @@ class CeleryWorkflow:
         elif isinstance(task, list):
             return self.get_first_task(task[0])
         else:
-            (task_name, val), = task.items()
+            ((task_name, val),) = task.items()
             if task_name == "GROUP":
                 return self.get_first_task(val[0])
             else:
@@ -273,13 +274,14 @@ class RedisClient:
 
     def init_redis(self):
         retry_sync = RetrySync(ExponentialBackoff(), retries=5)
-        self.conn = redis.from_url(os.getenv('REDIS_URL'),
-                                    password=os.getenv("REDIS_PASSWD"),
-                                    retry=retry_sync,
-                                    retry_on_error=[ConnectionError, BusyLoadingError, TimeoutError],
-                                    db=os.getenv('WORKER_REDIS_DB'),
-                                    decode_responses=True
-                                )
+        self.conn = redis.from_url(
+            os.getenv("REDIS_URL"),
+            password=os.getenv("REDIS_PASSWD"),
+            retry=retry_sync,
+            retry_on_error=[ConnectionError, BusyLoadingError, TimeoutError],
+            db=os.getenv("WORKER_REDIS_DB"),
+            decode_responses=True,
+        )
 
     def ping(self):
         return self.conn.ping()
@@ -325,8 +327,12 @@ class KafkaClient:
             self.partition_dict[p.pid] = {}
             kafka_dict = self.get_kafka_dict()
             for backend_type, (topic_list, _, conn_config) in kafka_dict.items():
-                self.producer_dict[p.pid][backend_type] = confluent_kafka.Producer(conn_config)
-                metadata = self.producer_dict[p.pid][backend_type].list_topics(timeout=10)
+                self.producer_dict[p.pid][backend_type] = confluent_kafka.Producer(
+                    conn_config
+                )
+                metadata = self.producer_dict[p.pid][backend_type].list_topics(
+                    timeout=10
+                )
                 self.partition_dict[p.pid][backend_type] = {}
                 # 在初始化时去拿 partition 数量
                 for topic in topic_list:
@@ -346,7 +352,9 @@ class KafkaClient:
             "offset": msg.offset(),
         }
 
-    def _produce_with_callback(self, topic, value, key, backend_type, partition=None, callback=None):
+    def _produce_with_callback(
+        self, topic, value, key, backend_type, partition=None, callback=None
+    ):
         def ack(err, msg):
             # if err is not None:
             #     print('Message delivery failed: {}'.format(err))
@@ -355,16 +363,27 @@ class KafkaClient:
             #     print('Message delivered to {} [{}]'.format(msg.topic(), msg.partition()))
             if callback:
                 callback(err, msg)
+
         try:
             if partition:
-                self.get_producer(backend_type).produce(topic=topic, value=value, key=key, on_delivery=ack, partition=partition)
+                self.get_producer(backend_type).produce(
+                    topic=topic,
+                    value=value,
+                    key=key,
+                    on_delivery=ack,
+                    partition=partition,
+                )
             else:
-                self.get_producer(backend_type).produce(topic=topic, value=value, key=key, on_delivery=ack)
+                self.get_producer(backend_type).produce(
+                    topic=topic, value=value, key=key, on_delivery=ack
+                )
             self.get_producer(backend_type).flush()
         except KafkaException as e:
             raise KafkaException(f"Error while producing message: {str(e)}")
 
-    def produce_message(self, message_dict, task_id, backend_type, topic=None, partition=None):
+    def produce_message(
+        self, message_dict, task_id, backend_type, topic=None, partition=None
+    ):
         message_dict["msg_key"] = str(uuid.uuid4())
         message = json.dumps(message_dict)
         kafka_dict = self.get_kafka_dict()
@@ -374,13 +393,23 @@ class KafkaClient:
             for topic_in_db in topic_list:
                 # 如果当前 topic 没指定 partition, 就用 task_id 分配
                 if topic_in_db not in partition_dict or not partition_dict[topic_in_db]:
-                    task_partition = self.get_hash_partition(task_id, topic_in_db, backend_type)
-                    self._produce_with_callback(topic_in_db, message, task_id, backend_type, partition=task_partition)
+                    task_partition = self.get_hash_partition(
+                        task_id, topic_in_db, backend_type
+                    )
+                    self._produce_with_callback(
+                        topic_in_db,
+                        message,
+                        task_id,
+                        backend_type,
+                        partition=task_partition,
+                    )
                 else:
                     # 向每个指定的 partition 都发一份
                     partition_list = partition_dict[topic_in_db]
                     for p in partition_list:
-                        self._produce_with_callback(topic_in_db, message, task_id, backend_type, partition=p)
+                        self._produce_with_callback(
+                            topic_in_db, message, task_id, backend_type, partition=p
+                        )
         except Exception as e:
             print(e)
             return None
@@ -405,7 +434,9 @@ db = SQLAlchemy(
 )
 migrate = Migrate()
 schema = JsonSchema()
-cel = FlaskCelery("director", broker_connection_retry_on_startup=True, loader=SubmoduleWorkerLoader)
+cel = FlaskCelery(
+    "director", broker_connection_retry_on_startup=True, loader=SubmoduleWorkerLoader
+)
 cel_workflows = CeleryWorkflow()
 sentry = DirectorSentry()
 
