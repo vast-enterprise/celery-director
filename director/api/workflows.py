@@ -19,7 +19,7 @@ def _get_workflow(workflow_id):
 
 # 这个函数只被 training server 用, 所以改成 async 也没事
 # celery worker 不会调用这个函数, 不会报错
-async def _execute_workflow(db_session, model_version, task_name, payload={}, comment=None):
+async def _execute_workflow(model_version, task_name, payload={}, comment=None):
     fullname = f"{model_version}:{task_name}"
 
     # Check if the workflow exists
@@ -34,12 +34,10 @@ async def _execute_workflow(db_session, model_version, task_name, payload={}, co
     mapped_priority = payload["mapped_priority"]
     # Create the workflow in DB
     obj = Workflow(id=task_id, tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
-    db_session.add(obj)
-    await db_session.commit()
-    await db_session.refresh(obj)
+    obj.save()
 
     # Build the workflow and execute it
-    workflow = WorkflowBuilder(obj.id, obj)
+    workflow = WorkflowBuilder(task_id, obj)
     conditions = payload["conditions"]
     queues = payload["queues"]
     workflow.run(queues, mapped_priority, conditions)
@@ -66,7 +64,7 @@ def _execute_workflow_relaunch(model_version, task_name, payload={}, comment=Non
     obj.save()
 
     # Build the workflow and execute it
-    workflow = WorkflowBuilder(obj.id)
+    workflow = WorkflowBuilder(task_id, obj)
     conditions = payload["conditions"]
     queues = payload["queues"]
     workflow.run(queues, mapped_priority, conditions)
@@ -76,7 +74,7 @@ def _execute_workflow_relaunch(model_version, task_name, payload={}, comment=Non
 
 
 def _cancel_workflow(obj):
-    workflow = WorkflowBuilder(obj.id)
+    workflow = WorkflowBuilder(obj.id, obj)
     workflow.cancel()
 
     app.logger.info(f"Workflow {obj.id} canceled")
