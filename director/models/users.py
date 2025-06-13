@@ -1,4 +1,4 @@
-import  uuid
+import uuid
 
 from sqlalchemy_utils import UUIDType
 
@@ -9,6 +9,7 @@ from director.models import BaseModel
 
 def get_uuid():
     return str(uuid.uuid4())
+
 
 class User(BaseModel):
     __tablename__ = "celery_users"
