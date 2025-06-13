@@ -15,6 +15,7 @@ from director.utils import validate, format_schema_errors, build_celery_schedule
 
 from director.exceptions import PayloadSyntaxError
 
+
 def tasks_to_ascii(tasks, hooks):
     tasks_str = ""
     # Wrap the tasks list
@@ -151,7 +152,13 @@ def run_workflow(ctx, fullname, payload, comment):
     # Create the workflow object
     # 把 v2.0-20240919:image2model 拆开
     model_version, task_name = fullname.split(":")
-    obj = Workflow(tripo_task_id=task_id, model_version=model_version, task_name=task_name, payload=payload, comment=comment)
+    obj = Workflow(
+        tripo_task_id=task_id,
+        model_version=model_version,
+        task_name=task_name,
+        payload=payload,
+        comment=comment,
+    )
     obj.save()
 
     # Build the canvas and execute it
@@ -205,7 +212,12 @@ def relaunch_workflow(ctx, id):
         raise click.Abort()
 
     # Create the workflow in DB
-    obj = Workflow(tripo_task_id=obj.tripo_task_id, project=obj.model_version, name=obj.task_name, payload=obj.payload)
+    obj = Workflow(
+        tripo_task_id=obj.tripo_task_id,
+        project=obj.model_version,
+        name=obj.task_name,
+        payload=obj.payload,
+    )
     obj.save()
 
     # Build the workflow and execute it

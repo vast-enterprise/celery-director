@@ -25,7 +25,7 @@ class Task(BaseModel):
     result = db.Column(PickleType)
     is_hook = db.Column(db.Boolean, default=False)
     data = db.Column(JSON, nullable=True)
-    
+
     # Relationship
     workflow_id = db.Column(
         UUIDType(binary=False),
