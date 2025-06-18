@@ -61,9 +61,9 @@ class Config(object):
         self.SQLALCHEMY_TRACK_MODIFICATIONS = False
         self.SQLALCHEMY_DATABASE_URI = env.str("DIRECTOR_DATABASE_URI", "")
         SQLALCHEMY_ENGINE_OPTIONS = {
-            'pool_size': 10,
-            'pool_recycle': env.int("DIRECTOR_DATABASE_POOL_RECYCLE", -1),
-            'pool_pre_ping': True
+            "pool_size": 10,
+            "pool_recycle": env.int("DIRECTOR_DATABASE_POOL_RECYCLE", -1),
+            "pool_pre_ping": True,
         }
         self.SQLALCHEMY_ENGINE_OPTIONS = SQLALCHEMY_ENGINE_OPTIONS
 
@@ -79,8 +79,8 @@ class Config(object):
                 # 不能加 sep 因为在 flower 里面是 sep 是写死了的
                 # "sep": ":",
                 # https://docs.celeryq.dev/projects/kombu/en/v5.2.3/reference/kombu.transport.redis.html#kombu.transport.redis.Transport.Channel.queue_order_strategy
-                "queue_order_strategy": "priority", 
-                "priority_steps": config.PRIORITY_LIST
+                "queue_order_strategy": "priority",
+                "priority_steps": config.PRIORITY_LIST,
             },
             "worker_hijack_root_logger": False,
             "worker_redirect_stdouts": False,
@@ -100,6 +100,7 @@ class Config(object):
         self.VUE_DEBUG = env.bool("DIRECTOR_VUE_DEBUG", False)
 
         self.NON_SUBMODULE_TASKS_QUEUE_NAME = config.NON_SUBMODULE_TASKS_QUEUE_NAME
+
 
 class UserConfig(dict):
     """Handle the user configuration"""

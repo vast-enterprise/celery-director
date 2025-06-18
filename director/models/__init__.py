@@ -5,6 +5,7 @@ from datetime import datetime
 
 from director.extensions import db
 
+
 class StatusType(enum.Enum):
     pending = "pending"
     progress = "progress"
@@ -17,7 +18,10 @@ class BaseModel(db.Model):
     __abstract__ = True
 
     created_at = db.Column(
-        db.DateTime(timezone=True), default=lambda: datetime.now(pytz.UTC), nullable=False, index=True
+        db.DateTime(timezone=True),
+        default=lambda: datetime.now(pytz.UTC),
+        nullable=False,
+        index=True,
     )
     updated_at = db.Column(
         db.DateTime(timezone=True),

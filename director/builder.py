@@ -44,30 +44,29 @@ class WorkflowBuilder(object):
         # Pointer to the previous task(s)
         self.previous = []
 
-
     @property
     def workflow(self):
         if not self._workflow:
             self._workflow = Workflow.query.filter_by(id=self.workflow_id).first()
         return self._workflow
 
-
     def get_task_type(self, task):
         if type(task) is list:
             return "chain"
         if type(task) is dict:
-            (task_name, _), = task.items() 
+            ((task_name, _),) = task.items()
             if task_name == "GROUP":
                 return "group"
         return "common"
 
-    def new_task(self, task_name, previous, is_hook, priority, assigned_queue, periodic):
+    def new_task(
+        self, task_name, previous, is_hook, priority, assigned_queue, periodic
+    ):
         task_id = uuid()
         if periodic:
             # periodic 任务统一放到单独的 worker 执行
             signature = cel.tasks.get(task_name).subtask(
-                task_id=task_id,
-                queue=cel.app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"]
+                task_id=task_id, queue=cel.app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"]
             )
             task = Task(
                 id=task_id,
@@ -80,14 +79,16 @@ class WorkflowBuilder(object):
 
         # We create the Celery task specifying its UID
         signature = cel.tasks.get(task_name).subtask(
-            kwargs={"workflow_id": str(self.workflow_id),
-                    "payload": self.workflow.payload},
+            kwargs={
+                "workflow_id": str(self.workflow_id),
+                "payload": self.workflow.payload,
+            },
             queue=assigned_queue,
             task_id=task_id,
-            expires=datetime.now(timezone.utc) + timedelta(hours=1)
+            expires=datetime.now(timezone.utc) + timedelta(hours=1),
         )
         signature.set(priority=priority)
-        
+
         if type(previous) != list:
             previous = [previous]
         # Director task has the same UID
@@ -102,7 +103,6 @@ class WorkflowBuilder(object):
         task.save()
         return signature
 
-
     def parse_queues(self):
         if type(self.queue) is dict:
             self.custom_queues = self.queue.get("customs", {})
@@ -110,13 +110,23 @@ class WorkflowBuilder(object):
         if type(self.queue) is not str or type(self.custom_queues) is not dict:
             raise WorkflowSyntaxError()
 
-
     def parse_wf(self, tasks, queues, conditions, priority, periodic, is_hook=False):
-        full_canvas = self.parse_recursive(tasks, None, None, queues, conditions, priority, is_hook, periodic)
+        full_canvas = self.parse_recursive(
+            tasks, None, None, queues, conditions, priority, is_hook, periodic
+        )
         return full_canvas
 
-
-    def parse_recursive(self, tasks, parent_type, parent, queues, conditions, priority, is_hook, periodic):
+    def parse_recursive(
+        self,
+        tasks,
+        parent_type,
+        parent,
+        queues,
+        conditions,
+        priority,
+        is_hook,
+        periodic,
+    ):
         def get_previous(all_tasks, previous_list):
             if isinstance(all_tasks, group):
                 for task in all_tasks.tasks:
@@ -124,7 +134,9 @@ class WorkflowBuilder(object):
                         tasks_in_chain = task["kwargs"]["tasks"]
                         if tasks_in_chain:
                             last_task_in_chain = tasks_in_chain[-1]
-                            if isinstance(last_task_in_chain, _chain) or isinstance(last_task_in_chain, group):
+                            if isinstance(last_task_in_chain, _chain) or isinstance(
+                                last_task_in_chain, group
+                            ):
                                 get_previous(last_task_in_chain, previous_list)
                             else:
                                 previous_list.append(last_task_in_chain.id)
@@ -136,7 +148,9 @@ class WorkflowBuilder(object):
                 tasks_in_chain = all_tasks["kwargs"]["tasks"]
                 if tasks_in_chain:
                     last_task_in_chain = tasks_in_chain[-1]
-                    if isinstance(last_task_in_chain, _chain) or isinstance(last_task_in_chain, group):
+                    if isinstance(last_task_in_chain, _chain) or isinstance(
+                        last_task_in_chain, group
+                    ):
                         get_previous(last_task_in_chain, previous_list)
                     else:
                         previous_list.append(last_task_in_chain.id)
@@ -145,10 +159,10 @@ class WorkflowBuilder(object):
 
         previous = []
         if parent != None:
-            if isinstance(parent.phase, group): 
+            if isinstance(parent.phase, group):
                 get_previous(parent.phase, previous)
             else:
-                previous = parent.phase.id 
+                previous = parent.phase.id
         canvas_phase = []
 
         for task in tasks:
@@ -161,12 +175,14 @@ class WorkflowBuilder(object):
                 task_name, is_skipped = task, False
                 # 如果是有条件的
                 if type(task) is dict:
-                    (task_name, task_config), = task.items()
+                    ((task_name, task_config),) = task.items()
                     if isinstance(task_config, dict):
                         condition_key = task_config.get("condition", "")
                     else:
                         condition_key = task_config
-                    is_skipped = condition_key in conditions and not conditions[condition_key]
+                    is_skipped = (
+                        condition_key in conditions and not conditions[condition_key]
+                    )
                 if not is_skipped:
                     # 如果 queues 非空则用 payload 中的 queues
                     assigned_queue = None
@@ -174,8 +190,12 @@ class WorkflowBuilder(object):
                         try:
                             assigned_queue = queues[task_name]
                         except Exception as e:
-                            raise WorkflowSyntaxError("Every task should have an assigned queue")
-                    signature = self.new_task(task_name, previous, is_hook, priority, assigned_queue, periodic)
+                            raise WorkflowSyntaxError(
+                                "Every task should have an assigned queue"
+                            )
+                    signature = self.new_task(
+                        task_name, previous, is_hook, priority, assigned_queue, periodic
+                    )
                     canvas_phase.append(CanvasPhase(signature, signature.id))
             # 如果是 GROUP 任务
             else:
@@ -185,7 +205,16 @@ class WorkflowBuilder(object):
                     current = canvas_phase[-1]
                 else:
                     current = parent
-                group_canvas_phase = self.parse_recursive(group_task, task_type, current, queues, conditions, priority, is_hook, periodic)
+                group_canvas_phase = self.parse_recursive(
+                    group_task,
+                    task_type,
+                    current,
+                    queues,
+                    conditions,
+                    priority,
+                    is_hook,
+                    periodic,
+                )
                 if group_canvas_phase:
                     canvas_phase.append(group_canvas_phase)
 
@@ -194,42 +223,59 @@ class WorkflowBuilder(object):
 
         if parent_type == "chain":
             chain_previous = canvas_phase[-1].phase.id
-            if isinstance(canvas_phase[-1].phase, group): 
+            if isinstance(canvas_phase[-1].phase, group):
                 chain_previous = [task.id for task in canvas_phase[-1].phase.tasks]
             return CanvasPhase(chain([ca.phase for ca in canvas_phase]), chain_previous)
         elif parent_type == "group":
+
             def flatten(lst):
                 for item in lst:
                     if isinstance(item, list):
                         yield from flatten(item)
                     else:
                         yield item
+
             group_previous = [ca.previous for ca in canvas_phase]
             # group_previous 有可能是 [task1, [task2, task3]] 这种嵌套情况
             flatten_previous = list(flatten(group_previous))
-            return CanvasPhase(group([ca.phase for ca in canvas_phase]), flatten_previous)
+            return CanvasPhase(
+                group([ca.phase for ca in canvas_phase]), flatten_previous
+            )
         else:
             return canvas_phase
-
 
     def build(self, queues, conditions, priority, periodic):
         # 不在 workflows.yml 里面定义 queue 名称
         # 所有 queue 名称都由 queues 传入
         self.parse_queues()
-        self.canvas_phase = self.parse_wf(self.tasks, queues, conditions, priority, periodic)
+        self.canvas_phase = self.parse_wf(
+            self.tasks, queues, conditions, priority, periodic
+        )
         task_assigned_queue = cel.app.config["NON_SUBMODULE_TASKS_QUEUE_NAME"]
-        self.canvas_phase.insert(0, CanvasPhase(
-            start.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority).set(payload={"workflow_id": self.workflow.id}),
-        []))
-        self.canvas_phase.append(CanvasPhase(
-            end.si(self.workflow.id).set(queue=task_assigned_queue).set(priority=priority).set(payload={"workflow_id": self.workflow.id}),
-        []))
+        self.canvas_phase.insert(
+            0,
+            CanvasPhase(
+                start.si(self.workflow.id)
+                .set(queue=task_assigned_queue)
+                .set(priority=priority)
+                .set(payload={"workflow_id": self.workflow.id}),
+                [],
+            ),
+        )
+        self.canvas_phase.append(
+            CanvasPhase(
+                end.si(self.workflow.id)
+                .set(queue=task_assigned_queue)
+                .set(priority=priority)
+                .set(payload={"workflow_id": self.workflow.id}),
+                [],
+            )
+        )
 
         if self.root_type == "group":
             self.canvas = group([ca.phase for ca in self.canvas_phase], task_id=uuid())
         else:
             self.canvas = chain([ca.phase for ca in self.canvas_phase], task_id=uuid())
-
 
     def build_hooks(self):
         initial_previous = self.previous
@@ -247,10 +293,11 @@ class WorkflowBuilder(object):
 
         if self.success_hook and not self.success_hook_canvas:
             self.previous = None
-            self.success_hook_canvas = [self.parse_wf([self.success_hook], {}, True)[0].phase]
+            self.success_hook_canvas = [
+                self.parse_wf([self.success_hook], {}, True)[0].phase
+            ]
 
         self.previous = initial_previous
-
 
     def run(self, queues, priority, conditions, periodic=False):
         if not self.canvas:
@@ -272,7 +319,6 @@ class WorkflowBuilder(object):
             self.workflow.status = StatusType.error
             self.workflow.save()
             raise e
-
 
     def cancel(self):
         status_to_cancel = set([StatusType.pending, StatusType.progress])

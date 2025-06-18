@@ -5,8 +5,10 @@ from director.extensions import db
 from director.models import BaseModel, StatusType
 from director.models.utils import JSONBType
 
+
 def get_uuid():
     return str(uuid.uuid4())
+
 
 class Workflow(BaseModel):
     __tablename__ = "celery_workflows"

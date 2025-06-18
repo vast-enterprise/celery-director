@@ -13,7 +13,13 @@ logger = logging.getLogger()
 def execute(workflow, payload):
     # periodic task 会在 celery beat 执行, 需要单独开启这个 worker
     model_version, task_name = workflow.split(":")
-    c_obj = Workflow(tripo_task_id="na", model_version=model_version, task_name=task_name, payload=payload, periodic=True)
+    c_obj = Workflow(
+        tripo_task_id="na",
+        model_version=model_version,
+        task_name=task_name,
+        payload=payload,
+        periodic=True,
+    )
     c_obj.save()
 
     # Build the workflow and execute it
