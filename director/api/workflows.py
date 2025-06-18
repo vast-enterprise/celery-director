@@ -66,6 +66,18 @@ def _execute_workflow_relaunch(model_version, task_name, payload={}, comment=Non
 
     task_id = payload["data"]["task_id"]
     mapped_priority = payload["mapped_priority"]
+
+    # Delete existing workflow with same task_id if it exists
+    existing_workflow = Workflow.query.filter_by(id=task_id).first()
+    if existing_workflow:
+        from director.extensions import db
+        from director.models.tasks import Task
+        # First delete all related tasks
+        db.session.query(Task).filter_by(workflow_id=existing_workflow.id).delete()
+        # Then delete the workflow
+        db.session.delete(existing_workflow)
+        db.session.commit()
+
     # Create the workflow in DB
     obj = Workflow(
         id=task_id,
@@ -163,7 +175,9 @@ def list_workflows():
         "per_page", type=int, default=app.config["WORKFLOWS_PER_PAGE"]
     )
 
-    workflows = Workflow.query.order_by(Workflow.created_at.desc()).paginate(
+    workflows = Workflow.query.filter_by(periodic=False).order_by(
+        Workflow.created_at.desc()
+    ).paginate(
         page=page, per_page=per_page
     )
 
